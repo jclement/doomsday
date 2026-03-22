@@ -233,8 +233,9 @@ func (e *sftpTestEnv) sftpBackup(configName string) string {
 	return snap.ID
 }
 
-// sftpRestoreTo restores a snapshot to the given directory.
-func (e *sftpTestEnv) sftpRestoreTo(snapshotID, targetDir string) {
+// sftpRestoreTo restores a snapshot to the given directory and returns the
+// path where source files ended up (accounting for absolute paths in the tree).
+func (e *sftpTestEnv) sftpRestoreTo(snapshotID, targetDir string) string {
 	e.t.Helper()
 	err := restore.Run(e.ctx, e.repo, snapshotID, targetDir, restore.Options{
 		Overwrite: true,
@@ -242,6 +243,7 @@ func (e *sftpTestEnv) sftpRestoreTo(snapshotID, targetDir string) {
 	if err != nil {
 		e.t.Fatalf("restore.Run: %v", err)
 	}
+	return filepath.Join(targetDir, e.sourceDir)
 }
 
 // reconnect closes the current backend and connects a new one to the same server.
@@ -292,10 +294,10 @@ func TestSFTPE2EFullRoundtrip(t *testing.T) {
 
 	// Restore and compare.
 	targetDir := t.TempDir()
-	env.sftpRestoreTo(snapID, targetDir)
+	effectiveDir := env.sftpRestoreTo(snapID, targetDir)
 
 	srcFiles := collectFiles(t, env.sourceDir)
-	dstFiles := collectFiles(t, targetDir)
+	dstFiles := collectFiles(t, effectiveDir)
 	assertFilesEqual(t, srcFiles, dstFiles)
 }
 
@@ -320,12 +322,12 @@ func TestSFTPE2EIncrementalBackup(t *testing.T) {
 
 	// Restore both snapshots and verify.
 	target1 := t.TempDir()
-	env.sftpRestoreTo(snapID1, target1)
-	files1 := collectFiles(t, target1)
+	effective1 := env.sftpRestoreTo(snapID1, target1)
+	files1 := collectFiles(t, effective1)
 
 	target2 := t.TempDir()
-	env.sftpRestoreTo(snapID2, target2)
-	files2 := collectFiles(t, target2)
+	effective2 := env.sftpRestoreTo(snapID2, target2)
+	files2 := collectFiles(t, effective2)
 
 	// Snap 1: original content.
 	sftpAssertFileContent(t, files1, "file1.txt", "original content")
@@ -371,9 +373,9 @@ func TestSFTPE2EReopenRepo(t *testing.T) {
 
 	// Restore from the reopened connection.
 	targetDir := t.TempDir()
-	env.sftpRestoreTo(snapID, targetDir)
+	effectiveDir := env.sftpRestoreTo(snapID, targetDir)
 
-	files := collectFiles(t, targetDir)
+	files := collectFiles(t, effectiveDir)
 	sftpAssertFileContent(t, files, "persist.txt", "this must survive reconnection")
 }
 
@@ -391,8 +393,8 @@ func TestSFTPE2EMultipleSnapshots(t *testing.T) {
 	// Each snapshot should be independently restorable.
 	for i, id := range snapIDs {
 		target := t.TempDir()
-		env.sftpRestoreTo(id, target)
-		files := collectFiles(t, target)
+		effectiveDir := env.sftpRestoreTo(id, target)
+		files := collectFiles(t, effectiveDir)
 
 		// Each snapshot should have files 0..i.
 		for j := 0; j <= i; j++ {
@@ -412,10 +414,10 @@ func TestSFTPE2ELargeFile(t *testing.T) {
 	snapID := env.sftpBackup("large-sftp")
 
 	targetDir := t.TempDir()
-	env.sftpRestoreTo(snapID, targetDir)
+	effectiveDir := env.sftpRestoreTo(snapID, targetDir)
 
 	srcFiles := collectFiles(t, env.sourceDir)
-	dstFiles := collectFiles(t, targetDir)
+	dstFiles := collectFiles(t, effectiveDir)
 	assertFilesEqual(t, srcFiles, dstFiles)
 }
 
@@ -610,11 +612,11 @@ func TestSFTPE2EClientIsolation(t *testing.T) {
 	// Restore and verify isolation.
 	target1 := t.TempDir()
 	restore.Run(ctx, repo1, snap1.ID, target1, restore.Options{Overwrite: true})
-	files1 := collectFiles(t, target1)
+	files1 := collectFiles(t, filepath.Join(target1, src1))
 
 	target2 := t.TempDir()
 	restore.Run(ctx, repo2, snap2.ID, target2, restore.Options{Overwrite: true})
-	files2 := collectFiles(t, target2)
+	files2 := collectFiles(t, filepath.Join(target2, src2))
 
 	sftpAssertFileContent(t, files1, "client1.txt", "client 1 data")
 	sftpAssertFileContent(t, files2, "client2.txt", "client 2 data")

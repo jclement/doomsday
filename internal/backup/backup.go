@@ -366,31 +366,66 @@ func Run(ctx context.Context, r *repo.Repository, opts Options) (*snapshot.Snaps
 			dirTreeIDs[dirRel] = treeID
 		}
 
-		// The root tree is the tree for the root directory (relPath "." or "")
-		rootRel := ""
-		if _, ok := dirTreeIDs[rootRel]; !ok {
-			rootRel = "."
-		}
-		rootTreeID, ok := dirTreeIDs[rootRel]
+		// The root tree is the deepest dir that was the backup root.
+		// With absolute paths, the initial relPath is e.g. "home/user".
+		// We need to wrap it in intermediate directory nodes up to "".
+		absRel := strings.TrimPrefix(filepath.ToSlash(rootPath), "/")
+		rootTreeID, ok := dirTreeIDs[absRel]
 		if !ok {
-			// Edge case: empty directory or root itself is a file
-			// Create an empty tree
-			emptyTree := &tree.Tree{Nodes: nil}
-			treeData, err := tree.Marshal(emptyTree)
-			if err != nil {
-				return nil, fmt.Errorf("backup.Run: marshal empty tree: %w", err)
-			}
-			rootTreeID = r.ContentID(treeData)
-			if r.Index().CheckAndAdd(rootTreeID) {
-				compressed := compress.Compress(treeData, opts.CompressionLevel)
-				encrypted, err := r.EncryptTreeBlob(rootTreeID, compressed)
+			if tid, ok2 := dirTreeIDs["."]; ok2 {
+				rootTreeID = tid
+			} else if tid, ok2 := dirTreeIDs[""]; ok2 {
+				rootTreeID = tid
+			} else {
+				// Edge case: empty directory
+				emptyTree := &tree.Tree{Nodes: nil}
+				treeData, err := tree.Marshal(emptyTree)
 				if err != nil {
-					return nil, fmt.Errorf("backup.Run: encrypt root tree: %w", err)
+					return nil, fmt.Errorf("backup.Run: marshal empty tree: %w", err)
 				}
-				if err := treePacker.AddBlob(ctx, rootTreeID, encrypted, uint32(len(treeData))); err != nil {
-					return nil, fmt.Errorf("backup.Run: pack root tree: %w", err)
+				rootTreeID = r.ContentID(treeData)
+				if r.Index().CheckAndAdd(rootTreeID) {
+					compressed := compress.Compress(treeData, opts.CompressionLevel)
+					encrypted, err := r.EncryptTreeBlob(rootTreeID, compressed)
+					if err != nil {
+						return nil, fmt.Errorf("backup.Run: encrypt root tree: %w", err)
+					}
+					if err := treePacker.AddBlob(ctx, rootTreeID, encrypted, uint32(len(treeData))); err != nil {
+						return nil, fmt.Errorf("backup.Run: pack root tree: %w", err)
+					}
 				}
 			}
+		}
+
+		// Wrap the root tree in intermediate directory nodes for each
+		// path component. E.g. "home/user" becomes:
+		//   "" -> {home -> {user -> rootTreeID}}
+		parts := strings.Split(absRel, "/")
+		for i := len(parts) - 1; i >= 0; i-- {
+			wrapperNode := tree.Node{
+				Name:    parts[i],
+				Type:    tree.NodeTypeDir,
+				Mode:    0755 | os.ModeDir,
+				ModTime: startTime,
+				Subtree: rootTreeID,
+			}
+			wrapperTree := &tree.Tree{Nodes: []tree.Node{wrapperNode}}
+			treeData, err := tree.Marshal(wrapperTree)
+			if err != nil {
+				return nil, fmt.Errorf("backup.Run: marshal wrapper tree: %w", err)
+			}
+			wrapperID := r.ContentID(treeData)
+			if r.Index().CheckAndAdd(wrapperID) {
+				compressed := compress.Compress(treeData, opts.CompressionLevel)
+				encrypted, err := r.EncryptTreeBlob(wrapperID, compressed)
+				if err != nil {
+					return nil, fmt.Errorf("backup.Run: encrypt wrapper tree: %w", err)
+				}
+				if err := treePacker.AddBlob(ctx, wrapperID, encrypted, uint32(len(treeData))); err != nil {
+					return nil, fmt.Errorf("backup.Run: pack wrapper tree: %w", err)
+				}
+			}
+			rootTreeID = wrapperID
 		}
 
 		rootTrees[ri] = rootTreeID
@@ -413,37 +448,15 @@ func Run(ctx context.Context, r *repo.Repository, opts Options) (*snapshot.Snaps
 	if len(rootTrees) == 1 {
 		snapshotTree = rootTrees[0]
 	} else {
-		// Create a wrapper tree with one node per root path
-		var metaNodes []tree.Node
-		for i, rootPath := range opts.Paths {
-			metaNodes = append(metaNodes, tree.Node{
-				Name:    filepath.Base(rootPath),
-				Type:    tree.NodeTypeDir,
-				Subtree: rootTrees[i],
-			})
-		}
-		sort.Slice(metaNodes, func(i, j int) bool {
-			return metaNodes[i].Name < metaNodes[j].Name
-		})
-		metaTree := &tree.Tree{Nodes: metaNodes}
-		treeData, err := tree.Marshal(metaTree)
+		// Each rootTree is wrapped in the full absolute path hierarchy.
+		// Merge them by combining top-level entries. For overlapping
+		// directory names (e.g. two sources under /home), we merge
+		// their subtrees recursively.
+		merged, err := mergeTrees(ctx, r, treePacker, rootTrees, opts.CompressionLevel)
 		if err != nil {
-			return nil, fmt.Errorf("backup.Run: marshal meta-tree: %w", err)
+			return nil, fmt.Errorf("backup.Run: merge trees: %w", err)
 		}
-		snapshotTree = r.ContentID(treeData)
-		if r.Index().CheckAndAdd(snapshotTree) {
-			compressed := compress.Compress(treeData, opts.CompressionLevel)
-			encrypted, err := r.EncryptTreeBlob(snapshotTree, compressed)
-			if err != nil {
-				return nil, fmt.Errorf("backup.Run: encrypt meta-tree: %w", err)
-			}
-			if err := treePacker.AddBlob(ctx, snapshotTree, encrypted, uint32(len(treeData))); err != nil {
-				return nil, fmt.Errorf("backup.Run: pack meta-tree: %w", err)
-			}
-			if err := treePacker.Flush(ctx); err != nil {
-				return nil, fmt.Errorf("backup.Run: flush meta-tree pack: %w", err)
-			}
-		}
+		snapshotTree = merged
 	}
 
 	// (c) Save index to backend
@@ -596,4 +609,89 @@ func generateSnapshotID() (string, error) {
 		return "", fmt.Errorf("generate snapshot ID: %w", err)
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// mergeTrees merges multiple root trees into one by combining overlapping
+// directory entries. Each rootTree is a tree blob that starts from the
+// filesystem root (e.g. both have a "home" entry if backing up paths
+// under /home).
+func mergeTrees(ctx context.Context, r *repo.Repository, packer *packer, treeIDs []types.BlobID, compressionLevel int) (types.BlobID, error) {
+	// Load all trees and collect their nodes.
+	nodesByName := make(map[string][]tree.Node) // name -> nodes from different trees
+	var names []string
+
+	for _, tid := range treeIDs {
+		data, err := r.LoadBlob(ctx, tid)
+		if err != nil {
+			return types.BlobID{}, fmt.Errorf("load tree for merge: %w", err)
+		}
+		t, err := tree.Unmarshal(data)
+		if err != nil {
+			return types.BlobID{}, fmt.Errorf("unmarshal tree for merge: %w", err)
+		}
+		for _, node := range t.Nodes {
+			if _, exists := nodesByName[node.Name]; !exists {
+				names = append(names, node.Name)
+			}
+			nodesByName[node.Name] = append(nodesByName[node.Name], node)
+		}
+	}
+
+	sort.Strings(names)
+
+	var merged []tree.Node
+	for _, name := range names {
+		nodes := nodesByName[name]
+		if len(nodes) == 1 {
+			merged = append(merged, nodes[0])
+			continue
+		}
+		// Multiple nodes with the same name — must all be dirs to merge.
+		allDirs := true
+		var subtreeIDs []types.BlobID
+		for _, n := range nodes {
+			if n.Type != tree.NodeTypeDir {
+				allDirs = false
+				break
+			}
+			if !n.Subtree.IsZero() {
+				subtreeIDs = append(subtreeIDs, n.Subtree)
+			}
+		}
+		if !allDirs || len(subtreeIDs) == 0 {
+			// Can't merge — just take the first one.
+			merged = append(merged, nodes[0])
+			continue
+		}
+		// Recursively merge the subtrees.
+		mergedSubtree, err := mergeTrees(ctx, r, packer, subtreeIDs, compressionLevel)
+		if err != nil {
+			return types.BlobID{}, err
+		}
+		node := nodes[0]
+		node.Subtree = mergedSubtree
+		merged = append(merged, node)
+	}
+
+	// Save the merged tree.
+	mergedTree := &tree.Tree{Nodes: merged}
+	treeData, err := tree.Marshal(mergedTree)
+	if err != nil {
+		return types.BlobID{}, fmt.Errorf("marshal merged tree: %w", err)
+	}
+	mergedID := r.ContentID(treeData)
+	if r.Index().CheckAndAdd(mergedID) {
+		compressed := compress.Compress(treeData, compressionLevel)
+		encrypted, err := r.EncryptTreeBlob(mergedID, compressed)
+		if err != nil {
+			return types.BlobID{}, fmt.Errorf("encrypt merged tree: %w", err)
+		}
+		if err := packer.AddBlob(ctx, mergedID, encrypted, uint32(len(treeData))); err != nil {
+			return types.BlobID{}, fmt.Errorf("pack merged tree: %w", err)
+		}
+		if err := packer.Flush(ctx); err != nil {
+			return types.BlobID{}, fmt.Errorf("flush merged tree: %w", err)
+		}
+	}
+	return mergedID, nil
 }

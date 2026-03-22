@@ -97,6 +97,7 @@ func init() {
 	clientCmd.AddCommand(forgetCmd)
 	clientCmd.AddCommand(cronCmd)
 	clientCmd.AddCommand(browseCmd)
+	clientCmd.AddCommand(browseTUICmd)
 }
 
 // runClientStatus is the default action when "doomsday client" is invoked

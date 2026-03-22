@@ -143,7 +143,8 @@ func (e *testEnv) backup(configName string) *snapshot.Snapshot {
 	return snap
 }
 
-// restore restores a snapshot to a temp directory and returns the path.
+// restore restores a snapshot to a temp directory and returns the path
+// where the source files ended up (accounting for absolute paths in the tree).
 func (e *testEnv) restore(snapshotID string) string {
 	e.t.Helper()
 	targetDir := e.t.TempDir()
@@ -153,7 +154,8 @@ func (e *testEnv) restore(snapshotID string) string {
 	if err != nil {
 		e.t.Fatalf("restore.Run: %v", err)
 	}
-	return targetDir
+	// The tree stores absolute paths, so files are under targetDir + sourceDir.
+	return filepath.Join(targetDir, e.sourceDir)
 }
 
 // collectFiles walks a directory and returns a map of relPath → content.
@@ -511,32 +513,39 @@ func TestE2EPartialRestore(t *testing.T) {
 
 	snap := env.backup("partial")
 
-	// Restore only the docs/ subtree
+	// Restore only the docs/ subtree.
+	// The tree stores absolute paths, so the include path must be
+	// relative to the tree root (i.e. the full sourceDir path without
+	// leading slash, plus "/docs").
+	docsTreePath := filepath.Join(strings.TrimPrefix(env.sourceDir, "/"), "docs")
 	targetDir := t.TempDir()
 	err := restore.Run(env.ctx, env.repo, snap.ID, targetDir, restore.Options{
-		IncludePaths: []string{"docs"},
+		IncludePaths: []string{docsTreePath},
 		Overwrite:    true,
 	})
 	if err != nil {
 		t.Fatalf("partial restore: %v", err)
 	}
 
+	// Files are restored under targetDir + sourceDir (absolute path preserved).
+	effectiveDir := filepath.Join(targetDir, env.sourceDir)
+
 	// docs/ files should exist
-	if data, err := os.ReadFile(filepath.Join(targetDir, "docs", "readme.md")); err != nil {
+	if data, err := os.ReadFile(filepath.Join(effectiveDir, "docs", "readme.md")); err != nil {
 		t.Errorf("docs/readme.md missing: %v", err)
 	} else if string(data) != "# README" {
 		t.Errorf("docs/readme.md = %q", string(data))
 	}
 
-	if _, err := os.ReadFile(filepath.Join(targetDir, "docs", "guide.txt")); err != nil {
+	if _, err := os.ReadFile(filepath.Join(effectiveDir, "docs", "guide.txt")); err != nil {
 		t.Errorf("docs/guide.txt missing: %v", err)
 	}
 
 	// src/ and root.txt should NOT exist
-	if _, err := os.ReadFile(filepath.Join(targetDir, "src", "main.go")); err == nil {
+	if _, err := os.ReadFile(filepath.Join(effectiveDir, "src", "main.go")); err == nil {
 		t.Error("src/main.go should not exist in partial restore")
 	}
-	if _, err := os.ReadFile(filepath.Join(targetDir, "root.txt")); err == nil {
+	if _, err := os.ReadFile(filepath.Join(effectiveDir, "root.txt")); err == nil {
 		t.Error("root.txt should not exist in partial restore")
 	}
 }
@@ -552,17 +561,50 @@ func TestE2ETreeBrowsing(t *testing.T) {
 
 	snap := env.backup("tree-browse")
 
-	// Load root tree
-	rootBlob, err := env.repo.LoadBlob(env.ctx, snap.Tree)
+	// Load root tree and walk down to the source directory level.
+	// The tree stores absolute paths, so the root tree starts from the
+	// filesystem root. We need to descend through each path component
+	// of env.sourceDir to reach the actual source files.
+	currentRef := snap.Tree
+	// Strip leading slash and split into components.
+	relSource := strings.TrimPrefix(env.sourceDir, "/")
+	parts := strings.Split(relSource, "/")
+	for _, part := range parts {
+		blob, err := env.repo.LoadBlob(env.ctx, currentRef)
+		if err != nil {
+			t.Fatalf("LoadBlob for path component %q: %v", part, err)
+		}
+		tr, err := tree.Unmarshal(blob)
+		if err != nil {
+			t.Fatalf("tree.Unmarshal for path component %q: %v", part, err)
+		}
+		found := false
+		for _, n := range tr.Nodes {
+			if n.Name == part {
+				if n.Subtree.IsZero() {
+					t.Fatalf("path component %q has no subtree", part)
+				}
+				currentRef = n.Subtree
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("path component %q not found in tree", part)
+		}
+	}
+
+	// Now currentRef points to the source directory tree.
+	rootBlob, err := env.repo.LoadBlob(env.ctx, currentRef)
 	if err != nil {
-		t.Fatalf("LoadBlob root tree: %v", err)
+		t.Fatalf("LoadBlob source tree: %v", err)
 	}
 	rootTree, err := tree.Unmarshal(rootBlob)
 	if err != nil {
-		t.Fatalf("tree.Unmarshal root: %v", err)
+		t.Fatalf("tree.Unmarshal source: %v", err)
 	}
 
-	// Check root entries
+	// Check source directory entries
 	names := make(map[string]tree.NodeType)
 	for _, node := range rootTree.Nodes {
 		names[node.Name] = node.Type

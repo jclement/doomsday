@@ -34,6 +34,11 @@ type browserEntry struct {
 	subtree types.BlobID // for directories
 }
 
+// Node returns the tree node for this entry.
+func (e browserEntry) Node() tree.Node {
+	return e.node
+}
+
 // pathEntry tracks a position in the directory navigation stack.
 type pathEntry struct {
 	treeID types.BlobID

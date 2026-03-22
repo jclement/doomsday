@@ -54,6 +54,14 @@ func (s *Session) IsUnlocked() bool {
 	return s.unlocked
 }
 
+// UnlockWithKey directly sets the master key (used by tests).
+func (s *Session) UnlockWithKey(mk crypto.MasterKey) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.masterKey = mk
+	s.unlocked = true
+}
+
 // Unlock resolves the master key using the same logic as the CLI.
 //
 //   - file: → key file (password needed for v1 encrypted)
@@ -245,8 +253,23 @@ func (s *Session) ForgetSnapshot(ctx context.Context, dest *config.DestConfig, s
 	return nil
 }
 
+// RefreshRepo evicts the cached repo for a destination so the next
+// OpenRepo call picks up any new index files.
+func (s *Session) RefreshRepo(dest *config.DestConfig) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := dest.Name
+	if b, ok := s.backends[key]; ok {
+		b.Close()
+		delete(s.backends, key)
+	}
+	delete(s.repos, key)
+}
+
 // LoadSnapshots loads all snapshots from a destination.
+// It refreshes the repo first to pick up any new backups.
 func (s *Session) LoadSnapshots(ctx context.Context, dest *config.DestConfig) ([]SnapshotItem, error) {
+	s.RefreshRepo(dest)
 	r, err := s.OpenRepo(ctx, dest)
 	if err != nil {
 		return nil, err

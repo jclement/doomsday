@@ -67,7 +67,11 @@ func walkRoot(ctx context.Context, root string, cfg walkerConfig, progress *prog
 		rootDev = getDeviceID(info)
 	}
 
-	return walkDir(ctx, root, root, "", info, rootDev, cfg, progress, ch)
+	// Use the absolute path (without leading separator) as the initial relPath.
+	// This stores full filesystem paths in the tree, making "restore in place"
+	// trivial: just restore to "/".
+	initialRel := strings.TrimPrefix(filepath.ToSlash(root), "/")
+	return walkDir(ctx, root, root, initialRel, info, rootDev, cfg, progress, ch)
 }
 
 // walkDir recursively walks a directory.

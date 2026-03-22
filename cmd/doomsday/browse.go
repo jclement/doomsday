@@ -5,20 +5,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var browseCmd = &cobra.Command{
-	Use:   "browse",
-	Short: "Browse backups interactively",
-	Long: `Open a TUI browser to navigate backup configurations, destinations,
+var browseTUICmd = &cobra.Command{
+	Use:   "browse-tui",
+	Short: "Browse backups in the terminal (TUI)",
+	Long: `Open a terminal TUI browser to navigate backup configurations, destinations,
 snapshots, and files.
 
 Requires a configured encryption key and at least one destination.
 
 Examples:
-  doomsday client browse`,
-	RunE: runBrowse,
+  doomsday client browse-tui`,
+	RunE: runBrowseTUI,
 }
 
-func runBrowse(cmd *cobra.Command, args []string) error {
+func runBrowseTUI(cmd *cobra.Command, args []string) error {
 	cfg, err := loadAndValidateConfig()
 	if err != nil {
 		return err

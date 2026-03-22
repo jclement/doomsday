@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jclement/doomsday/internal/config"
@@ -219,11 +220,41 @@ func renderStatusDashboard(cfg *config.Config, state *scheduler.State, configNam
 	if len(cfg.Destinations) == 0 {
 		fmt.Println("  " + cliStyles.Warning.Render("No destinations configured"))
 	} else {
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
+		// Check all destinations in parallel with short per-dest timeout.
+		type destResult struct {
+			dest      config.DestConfig
+			reachable bool
+			connErr   error
+		}
+		results := make([]destResult, len(cfg.Destinations))
+		var wg sync.WaitGroup
+		for i, dest := range cfg.Destinations {
+			wg.Add(1)
+			go func(idx int, d config.DestConfig) {
+				defer wg.Done()
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				defer cancel()
+				results[idx] = destResult{dest: d}
+				backend, err := openBackend(ctx, &d)
+				if err != nil {
+					results[idx].connErr = err
+					return
+				}
+				err = backend.List(ctx, types.FileTypeConfig, func(fi types.FileInfo) error {
+					return nil
+				})
+				backend.Close()
+				if err != nil {
+					results[idx].connErr = err
+				} else {
+					results[idx].reachable = true
+				}
+			}(i, dest)
+		}
+		wg.Wait()
 
-		for _, dest := range cfg.Destinations {
-			renderDestStatus(ctx, cfg, state, configName, dest)
+		for _, r := range results {
+			renderDestStatus(r.dest, r.reachable, r.connErr, state, configName)
 		}
 	}
 
@@ -295,31 +326,20 @@ func renderStatusDashboard(cfg *config.Config, state *scheduler.State, configNam
 	return nil
 }
 
-func renderDestStatus(ctx context.Context, cfg *config.Config, state *scheduler.State, configName string, dest config.DestConfig) {
-	active := ""
-	if !dest.IsActive() {
-		active = cliStyles.Muted.Render(" (inactive)")
+func renderDestStatus(dest config.DestConfig, reachable bool, connErr error, state *scheduler.State, configName string) {
+	active := dest.IsActive()
+	activeLabel := ""
+	if !active {
+		activeLabel = cliStyles.Muted.Render(" (inactive)")
 	}
 
-	// Connection test.
-	dc := dest
-	reachable := false
-	var connErr error
-
-	backend, err := openBackend(ctx, &dc)
-	if err != nil {
-		connErr = err
+	// Dot color: green=reachable, red=unreachable, yellow=inactive.
+	var dot string
+	if !active {
+		dot = cliStyles.Warning.Render("●")
 	} else {
-		connErr = backend.List(ctx, types.FileTypeConfig, func(fi types.FileInfo) error {
-			return nil
-		})
-		backend.Close()
-		if connErr == nil {
-			reachable = true
-		}
+		dot = statusDot(reachable)
 	}
-
-	dot := statusDot(reachable)
 	typeStr := cliStyles.Muted.Render("[" + dest.Type + "]")
 
 	// Per-destination last backup.
@@ -332,7 +352,7 @@ func renderDestStatus(ctx context.Context, cfg *config.Config, state *scheduler.
 		lastStr = fmt.Sprintf("%s (%s ago)", destLast.Local().Format("2006-01-02 15:04"), ago)
 	}
 
-	fmt.Printf("  %s %s %s%s\n", dot, cliStyles.Value.Render(dest.Name), typeStr, active)
+	fmt.Printf("  %s %s %s%s\n", dot, cliStyles.Value.Render(dest.Name), typeStr, activeLabel)
 
 	destDetail := destLocation(dest)
 	if destDetail != "" {

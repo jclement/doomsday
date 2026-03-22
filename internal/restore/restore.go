@@ -200,12 +200,12 @@ func Run(ctx context.Context, r *repo.Repository, snapshotID string, targetDir s
 		}
 		// Directories in reverse order so children are set before parents
 		// (a restrictive parent mode should not block child chmod).
+		// Best-effort: intermediate/wrapper directories (like /Users)
+		// may not be owned by the current user — skip errors.
 		for i := len(plan.dirs) - 1; i >= 0; i-- {
 			d := plan.dirs[i]
 			dirPath := filepath.Join(absTarget, d.relPath)
-			if err := os.Chmod(dirPath, d.node.Mode.Perm()); err != nil {
-				return fmt.Errorf("restore: chmod dir %s: %w", d.relPath, err)
-			}
+			_ = os.Chmod(dirPath, d.node.Mode.Perm())
 		}
 	}
 
@@ -219,18 +219,13 @@ func Run(ctx context.Context, r *repo.Repository, snapshotID string, targetDir s
 			}
 		}
 		for _, s := range plan.symlinks {
-			// Symlink timestamps: best-effort via Lchtimes where available.
-			// os.Chtimes follows symlinks, so we skip symlinks here to
-			// avoid modifying the target. Platform-specific Lchtimes
-			// can be added in the future.
 			_ = s // intentionally no-op for now
 		}
+		// Best-effort for directories — wrapper dirs may not be owned by us.
 		for i := len(plan.dirs) - 1; i >= 0; i-- {
 			d := plan.dirs[i]
 			dirPath := filepath.Join(absTarget, d.relPath)
-			if err := os.Chtimes(dirPath, d.node.AccessTime, d.node.ModTime); err != nil {
-				return fmt.Errorf("restore: chtimes dir %s: %w", d.relPath, err)
-			}
+			_ = os.Chtimes(dirPath, d.node.AccessTime, d.node.ModTime)
 		}
 	}
 
@@ -432,6 +427,10 @@ func validateNodeName(name string) error {
 // validateRestorePath ensures the final path stays within the target directory.
 func validateRestorePath(absTarget, finalPath string) error {
 	cleaned := filepath.Clean(finalPath)
+	// Root target: everything is valid (can't escape /).
+	if absTarget == "/" {
+		return nil
+	}
 	// Ensure the cleaned path starts with the target directory.
 	if !strings.HasPrefix(cleaned+string(filepath.Separator), absTarget+string(filepath.Separator)) {
 		return fmt.Errorf("restore: path traversal detected: %s escapes target %s", cleaned, absTarget)
