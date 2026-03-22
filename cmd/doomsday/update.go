@@ -1,37 +1,50 @@
 package main
 
 import (
+	"bytes"
 	"context"
-	"errors"
+	"crypto/ecdsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/creativeprojects/go-selfupdate"
+	"github.com/sigstore/sigstore-go/pkg/bundle"
+	"github.com/sigstore/sigstore-go/pkg/root"
+	"github.com/sigstore/sigstore-go/pkg/tuf"
+	"github.com/sigstore/sigstore-go/pkg/verify"
 	"github.com/spf13/cobra"
 )
 
-var errCosignNotFound = errors.New("cosign not found in PATH")
+var updateFlagForce bool
 
 var updateCmd = &cobra.Command{
 	Use:   "update",
 	Short: "Update doomsday to the latest version",
 	Long: `Checks for a newer version on GitHub and replaces the current binary.
 
-Verifies SHA-256 checksums from the release and, if the cosign CLI is
-installed, cryptographically verifies the checksums file was signed by
-the official GitHub Actions release workflow.
+Verifies the release's Sigstore signature to ensure it was built by the
+official GitHub Actions release workflow. No external tools required —
+verification uses the Sigstore trusted root.
 
-Install cosign for full signature verification:
-  https://docs.sigstore.dev/cosign/system_config/installation/`,
+Examples:
+  doomsday update
+  doomsday update --force`,
 	RunE: runUpdate,
 }
 
+func init() {
+	updateCmd.Flags().BoolVar(&updateFlagForce, "force", false, "force update even if already up to date")
+}
 
 func runUpdate(cmd *cobra.Command, args []string) error {
 	if version == "dev" {
@@ -40,7 +53,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
-	// Configure updater with SHA-256 checksum verification.
 	updater, err := selfupdate.NewUpdater(selfupdate.Config{
 		Validator: &selfupdate.ChecksumValidator{UniqueFilename: "checksums.txt"},
 	})
@@ -58,25 +70,18 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	v := strings.TrimPrefix(version, "v")
-	if !latest.GreaterThan(v) {
+	if !latest.GreaterThan(v) && !updateFlagForce {
 		logger.Info("Already up to date", "version", v)
 		return nil
 	}
 
 	logger.Info("New version available", "current", v, "latest", latest.Version())
 
-	// Verify cosign signature on checksums before applying the update.
 	tag := "v" + latest.Version()
-	if err := verifyCosign(ctx, tag); err != nil {
-		if errors.Is(err, errCosignNotFound) {
-			logger.Warn("cosign not installed; signature verification skipped",
-				"hint", "install cosign for cryptographic release verification: https://docs.sigstore.dev/cosign/system_config/installation/")
-		} else {
-			return fmt.Errorf("update: cosign signature verification failed: %w (this may indicate a tampered release)", err)
-		}
-	} else {
-		logger.Info("Release signature verified via cosign")
+	if err := verifyRelease(ctx, tag); err != nil {
+		return fmt.Errorf("update: signature verification failed: %w\n\nThis may indicate a tampered release. Do NOT proceed.", err)
 	}
+	logger.Info("Release signature verified (Sigstore)")
 
 	exe, err := os.Executable()
 	if err != nil {
@@ -91,85 +96,171 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// verifyCosign downloads the cosign signature from the GitHub release and
-// verifies checksums.txt using the cosign CLI. This ensures the checksums
-// file was signed by the official GitHub Actions release workflow (keyless
-// signing via Sigstore/Fulcio).
-//
-// Returns errCosignNotFound if cosign is not installed.
-// Returns an error if cosign is installed but verification fails.
-func verifyCosign(ctx context.Context, tag string) error {
-	cosignPath, err := exec.LookPath("cosign")
-	if err != nil {
-		return errCosignNotFound
-	}
-
-	tmpDir, err := os.MkdirTemp("", "doomsday-update-*")
-	if err != nil {
-		return fmt.Errorf("create temp dir: %w", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
+// verifyRelease downloads the checksums and Sigstore bundle from the GitHub
+// release and verifies the signature. Supports both the new protobuf-based
+// bundle format and the legacy cosign bundle format.
+func verifyRelease(ctx context.Context, tag string) error {
 	baseURL := fmt.Sprintf("https://github.com/jclement/doomsday/releases/download/%s", tag)
 
-	// Download checksums and signature (required).
-	for _, f := range []string{"checksums.txt", "checksums.txt.sig"} {
-		if err := downloadReleaseFile(ctx, baseURL+"/"+f, filepath.Join(tmpDir, f)); err != nil {
-			return fmt.Errorf("download %s: %w", f, err)
+	checksumData, err := downloadBytes(ctx, baseURL+"/checksums.txt")
+	if err != nil {
+		return fmt.Errorf("download checksums.txt: %w", err)
+	}
+
+	bundleData, err := downloadBytes(ctx, baseURL+"/checksums.txt.sigstore.json")
+	if err != nil {
+		return fmt.Errorf("download sigstore bundle: %w", err)
+	}
+
+	// Try the new sigstore-go protobuf bundle format first.
+	var b bundle.Bundle
+	if err := b.UnmarshalJSON(bundleData); err == nil {
+		return verifyNewBundle(checksumData, &b)
+	}
+
+	// Fall back to legacy cosign bundle format.
+	return verifyLegacyBundle(checksumData, bundleData)
+}
+
+// verifyNewBundle verifies using the sigstore-go library with TUF trusted root.
+func verifyNewBundle(checksumData []byte, b *bundle.Bundle) error {
+	trustedRoot, err := root.NewLiveTrustedRoot(tuf.DefaultOptions())
+	if err != nil {
+		return fmt.Errorf("loading trusted root: %w", err)
+	}
+
+	verifier, err := verify.NewVerifier(trustedRoot,
+		verify.WithSignedCertificateTimestamps(1),
+		verify.WithTransparencyLog(1),
+		verify.WithObserverTimestamps(1),
+	)
+	if err != nil {
+		return fmt.Errorf("creating verifier: %w", err)
+	}
+
+	certID, err := verify.NewShortCertificateIdentity(
+		"https://token.actions.githubusercontent.com", "",
+		"", "^https://github.com/jclement/doomsday/",
+	)
+	if err != nil {
+		return fmt.Errorf("creating certificate identity: %w", err)
+	}
+
+	_, err = verifier.Verify(b,
+		verify.NewPolicy(
+			verify.WithArtifact(bytes.NewReader(checksumData)),
+			verify.WithCertificateIdentity(certID),
+		),
+	)
+	if err != nil {
+		return fmt.Errorf("sigstore verification failed: %w", err)
+	}
+	return nil
+}
+
+// legacyCosignBundle is the old cosign sign-blob --bundle format.
+type legacyCosignBundle struct {
+	Base64Signature string          `json:"base64Signature"`
+	Cert            string          `json:"cert"`
+	RekorBundle     legacyRekor     `json:"rekorBundle"`
+}
+
+type legacyRekor struct {
+	Payload legacyRekorPayload `json:"Payload"`
+}
+
+type legacyRekorPayload struct {
+	IntegratedTime int64 `json:"integratedTime"`
+}
+
+// verifyLegacyBundle verifies the old cosign bundle format (base64Signature + cert).
+func verifyLegacyBundle(checksumData, bundleJSON []byte) error {
+	var ob legacyCosignBundle
+	if err := json.Unmarshal(bundleJSON, &ob); err != nil {
+		return fmt.Errorf("parsing bundle: %w", err)
+	}
+	if ob.Base64Signature == "" || ob.Cert == "" {
+		return fmt.Errorf("bundle missing signature or certificate")
+	}
+
+	sig, err := base64.StdEncoding.DecodeString(ob.Base64Signature)
+	if err != nil {
+		return fmt.Errorf("decoding signature: %w", err)
+	}
+
+	certPEM, err := base64.StdEncoding.DecodeString(ob.Cert)
+	if err != nil {
+		return fmt.Errorf("decoding certificate: %w", err)
+	}
+
+	cert, err := parsePEMCert(certPEM)
+	if err != nil {
+		return err
+	}
+
+	// Verify certificate chain via TUF trusted root.
+	trustedRoot, err := root.NewLiveTrustedRoot(tuf.DefaultOptions())
+	if err != nil {
+		return fmt.Errorf("loading trusted root: %w", err)
+	}
+
+	certVerified := false
+	verifyTime := time.Unix(ob.RekorBundle.Payload.IntegratedTime, 0)
+	for _, ca := range trustedRoot.FulcioCertificateAuthorities() {
+		if _, err := ca.Verify(cert, verifyTime); err == nil {
+			certVerified = true
+			break
 		}
 	}
-
-	// Certificate file is optional; enables offline verification without Rekor lookup.
-	pemPath := filepath.Join(tmpDir, "checksums.txt.pem")
-	havePem := false
-	if err := downloadReleaseFile(ctx, baseURL+"/checksums.txt.pem", pemPath); err == nil {
-		havePem = true
+	if !certVerified {
+		return fmt.Errorf("certificate not issued by a trusted Fulcio CA")
 	}
 
-	// Build cosign verify-blob command.
-	verifyArgs := []string{
-		"verify-blob",
-		filepath.Join(tmpDir, "checksums.txt"),
-		"--signature", filepath.Join(tmpDir, "checksums.txt.sig"),
-		"--certificate-oidc-issuer", "https://token.actions.githubusercontent.com",
-		"--certificate-identity-regexp", `github\.com/jclement/doomsday`,
+	// Check identity.
+	foundIdentity := false
+	for _, uri := range cert.URIs {
+		if strings.HasPrefix(uri.String(), "https://github.com/jclement/doomsday/") {
+			foundIdentity = true
+			break
+		}
 	}
-	if havePem {
-		verifyArgs = append(verifyArgs, "--certificate", pemPath)
+	if !foundIdentity {
+		return fmt.Errorf("certificate identity does not match expected GitHub workflow")
 	}
 
-	cmd := exec.CommandContext(ctx, cosignPath, verifyArgs...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("cosign verify-blob: %s: %w", strings.TrimSpace(string(output)), err)
+	// Verify ECDSA signature.
+	ecPub, ok := cert.PublicKey.(*ecdsa.PublicKey)
+	if !ok {
+		return fmt.Errorf("certificate public key is not ECDSA")
+	}
+	digest := sha256.Sum256(checksumData)
+	if !ecdsa.VerifyASN1(ecPub, digest[:], sig) {
+		return fmt.Errorf("ECDSA signature verification failed")
 	}
 
 	return nil
 }
 
-// downloadReleaseFile downloads a file from a URL to a local path.
-func downloadReleaseFile(ctx context.Context, url, dest string) error {
+func parsePEMCert(data []byte) (*x509.Certificate, error) {
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil, fmt.Errorf("no PEM block in certificate")
+	}
+	return x509.ParseCertificate(block.Bytes)
+}
+
+func downloadBytes(ctx context.Context, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("HTTP %d for %s", resp.StatusCode, url)
+		return nil, fmt.Errorf("HTTP %d for %s", resp.StatusCode, url)
 	}
-
-	f, err := os.Create(dest)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	// Limit download to 10 MiB to prevent abuse.
-	_, err = io.Copy(f, io.LimitReader(resp.Body, 10<<20))
-	return err
+	return io.ReadAll(io.LimitReader(resp.Body, 10<<20))
 }

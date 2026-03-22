@@ -17,10 +17,73 @@ require (
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/minio/minio-go/v7 v7.0.99
 	github.com/pkg/sftp v1.13.10
+	github.com/sigstore/sigstore-go v1.1.4
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/sync v0.20.0
 	golang.org/x/term v0.41.0
 	tailscale.com v1.96.3
+)
+
+require (
+	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
+	github.com/blang/semver v3.5.1+incompatible // indirect
+	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/cyberphone/json-canonicalization v0.0.0-20241213102144-19d51d7fe467 // indirect
+	github.com/digitorus/pkcs7 v0.0.0-20230818184609-3a137a874352 // indirect
+	github.com/digitorus/timestamp v0.0.0-20231217203849-220c5c2851b7 // indirect
+	github.com/go-logr/logr v1.4.3 // indirect
+	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/go-openapi/analysis v0.24.1 // indirect
+	github.com/go-openapi/errors v0.22.4 // indirect
+	github.com/go-openapi/jsonpointer v0.22.1 // indirect
+	github.com/go-openapi/jsonreference v0.21.3 // indirect
+	github.com/go-openapi/loads v0.23.2 // indirect
+	github.com/go-openapi/runtime v0.29.2 // indirect
+	github.com/go-openapi/spec v0.22.1 // indirect
+	github.com/go-openapi/strfmt v0.25.0 // indirect
+	github.com/go-openapi/swag v0.25.4 // indirect
+	github.com/go-openapi/swag/cmdutils v0.25.4 // indirect
+	github.com/go-openapi/swag/conv v0.25.4 // indirect
+	github.com/go-openapi/swag/fileutils v0.25.4 // indirect
+	github.com/go-openapi/swag/jsonname v0.25.4 // indirect
+	github.com/go-openapi/swag/jsonutils v0.25.4 // indirect
+	github.com/go-openapi/swag/loading v0.25.4 // indirect
+	github.com/go-openapi/swag/mangling v0.25.4 // indirect
+	github.com/go-openapi/swag/netutils v0.25.4 // indirect
+	github.com/go-openapi/swag/stringutils v0.25.4 // indirect
+	github.com/go-openapi/swag/typeutils v0.25.4 // indirect
+	github.com/go-openapi/swag/yamlutils v0.25.4 // indirect
+	github.com/go-openapi/validate v0.25.1 // indirect
+	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
+	github.com/google/certificate-transparency-go v1.3.2 // indirect
+	github.com/google/go-containerregistry v0.20.7 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.3 // indirect
+	github.com/in-toto/attestation v1.1.2 // indirect
+	github.com/in-toto/in-toto-golang v0.9.0 // indirect
+	github.com/oklog/ulid v1.3.1 // indirect
+	github.com/opencontainers/go-digest v1.0.0 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
+	github.com/secure-systems-lab/go-securesystemslib v0.9.1 // indirect
+	github.com/shibumi/go-pathspec v1.3.0 // indirect
+	github.com/sigstore/protobuf-specs v0.5.0 // indirect
+	github.com/sigstore/rekor v1.4.3 // indirect
+	github.com/sigstore/rekor-tiles/v2 v2.0.1 // indirect
+	github.com/sigstore/sigstore v1.10.0 // indirect
+	github.com/sigstore/timestamp-authority/v2 v2.0.3 // indirect
+	github.com/theupdateframework/go-tuf/v2 v2.3.0 // indirect
+	github.com/transparency-dev/formats v0.0.0-20251017110053-404c0d5b696c // indirect
+	github.com/transparency-dev/merkle v0.0.2 // indirect
+	go.mongodb.org/mongo-driver v1.17.6 // indirect
+	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
+	go.opentelemetry.io/otel v1.39.0 // indirect
+	go.opentelemetry.io/otel/metric v1.39.0 // indirect
+	go.opentelemetry.io/otel/trace v1.39.0 // indirect
+	golang.org/x/mod v0.33.0 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20251213004720-97cd9d5aeac2 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20251222181119-0a764e51fe1b // indirect
+	google.golang.org/grpc v1.78.0 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
 )
 
 require (
@@ -32,16 +95,16 @@ require (
 	github.com/alexbrainman/sspi v0.0.0-20231016080023-1a75b4708caa // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.41.0 // indirect
-	github.com/aws/aws-sdk-go-v2/config v1.29.5 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.17.58 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.27 // indirect
+	github.com/aws/aws-sdk-go-v2/config v1.31.20 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.18.24 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.13 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.16 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.16 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.2 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.16 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.24.14 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.28.13 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.30.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.7 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.5 // indirect
 	github.com/aws/smithy-go v1.24.0 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
@@ -101,7 +164,7 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/safchain/ethtool v0.3.0 // indirect
-	github.com/spf13/pflag v1.0.9 // indirect
+	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/tailscale/certstore v0.1.1-0.20231202035212-d3fa0460f47e // indirect
 	github.com/tailscale/go-winio v0.0.0-20231025203758-c4f33415bf55 // indirect
 	github.com/tailscale/hujson v0.0.0-20221223112325-20486734a56a // indirect
