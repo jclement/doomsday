@@ -1,0 +1,105 @@
+version: 2
+
+project_name: doomsday
+
+before:
+  hooks:
+    - go mod tidy
+    - go vet ./...
+
+builds:
+  - main: ./cmd/doomsday
+    binary: doomsday
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    args:
+      - "sign-blob"
+      - "--bundle=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
+brews:
+  - repository:
+      owner: jclement
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    name: doomsday
+    homepage: "https://github.com/jclement/doomsday"
+    description: "Backup for the end of the world"
+    install: |
+      bin.install "doomsday"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+
+release:
+  github:
+    owner: jclement
+    name: doomsday
+  draft: false
+  prerelease: auto
+
+dockers:
+  - image_templates:
+      - "ghcr.io/jclement/doomsday:{{ .Version }}-amd64"
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+    dockerfile: Dockerfile
+    goos: linux
+    goarch: amd64
+  - image_templates:
+      - "ghcr.io/jclement/doomsday:{{ .Version }}-arm64"
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+    dockerfile: Dockerfile
+    goos: linux
+    goarch: arm64
+
+docker_manifests:
+  - name_template: "ghcr.io/jclement/doomsday:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/jclement/doomsday:{{ .Version }}-amd64"
+      - "ghcr.io/jclement/doomsday:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/jclement/doomsday:latest"
+    image_templates:
+      - "ghcr.io/jclement/doomsday:{{ .Version }}-amd64"
+      - "ghcr.io/jclement/doomsday:{{ .Version }}-arm64"

@@ -1,0 +1,28 @@
+# Binary
+/doomsday
+/doomsday.exe
+dist/
+
+# Test
+coverage.out
+coverage.html
+*.test
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+*.key
+!internal/crypto/testdata/*.key
+
+# Cache
+.cache/

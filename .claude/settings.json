@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mise exec -- *)",
+      "Bash(go test *)",
+      "Bash(go build *)",
+      "Bash(go vet *)",
+      "Bash(go mod *)",
+      "Bash(go doc *)",
+      "Bash(go get *)",
+      "Bash(find *)",
+      "Bash(ls *)",
+      "Bash(mkdir *)",
+      "Bash(git *)",
+      "Bash(which *)",
+      "Bash(cat *)",
+      "Bash(/tmp/doomsday client backup --help)"
+    ]
+  }
+}
