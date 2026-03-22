@@ -30,7 +30,7 @@
 - **SFTP server mode** -- Run Doomsday as a backup target with per-user quotas and append-only mode.
 - **Flexible retention** -- Keep last N, hourly, daily, weekly, monthly, yearly policies per backup config.
 - **Notifications** -- Command execution, webhooks, or email on backup failure. Escalation if no successful backup in N days.
-- **Cron mode** -- `doomsday cron install` generates systemd timers or launchd plists. No crontab editing.
+- **Cron mode** -- `doomsday client cron install` generates systemd timers or launchd plists. No crontab editing.
 - **Self-updating** -- `doomsday update` pulls the latest signed release.
 - **Whimsy** -- Backup software doesn't have to be boring. (Disable with `whimsy = false` if you hate fun.)
 
@@ -74,6 +74,8 @@ Create `~/.config/doomsday/client.yaml`:
 
 ```yaml
 # ~/.config/doomsday/client.yaml
+
+key: env:DOOMSDAY_PASSWORD   # or a literal passphrase
 
 sources:
   - path: ~/Documents
@@ -192,10 +194,10 @@ doomsday client restore latest --target /tmp/restore
 
 ```bash
 # Install a systemd timer / launchd plist
-doomsday cron install
+doomsday client cron install
 
 # Run scheduled backups (used by the installed timer)
-doomsday cron
+doomsday client cron
 ```
 
 Configure notifications so you know when things go wrong:
@@ -231,7 +233,7 @@ doomsday server serve
 Every command supports `--json` for scripting and automation:
 
 ```bash
-doomsday client snapshots --json | jq '.[0].id'
+doomsday client snapshots --json | jq '.snapshots[0].id'
 doomsday client backup --json
 doomsday client status --json
 ```

@@ -144,7 +144,13 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(out)
+		if err := enc.Encode(out); err != nil {
+			return err
+		}
+		if !report.OK() {
+			return fmt.Errorf("integrity check found %d error(s)", len(report.Errors))
+		}
+		return nil
 	}
 
 	logger.Info("Check results",

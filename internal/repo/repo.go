@@ -187,6 +187,10 @@ func (r *Repository) Index() *index.Index { return r.idx }
 // Backend returns the underlying backend.
 func (r *Repository) Backend() types.Backend { return r.backend }
 
+// ReplaceIndex swaps the repository's in-memory index with a new one.
+// Used by prune to install a garbage-collected index.
+func (r *Repository) ReplaceIndex(idx *index.Index) { r.idx = idx }
+
 // RepoID returns the repository identifier.
 func (r *Repository) RepoID() string { return r.config.ID }
 

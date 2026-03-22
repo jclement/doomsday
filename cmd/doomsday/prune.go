@@ -12,9 +12,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jclement/doomsday/internal/index"
 	"github.com/jclement/doomsday/internal/lock"
 	"github.com/jclement/doomsday/internal/prune"
+	"github.com/jclement/doomsday/internal/repo"
 	"github.com/jclement/doomsday/internal/snapshot"
+	"github.com/jclement/doomsday/internal/tree"
 	"github.com/jclement/doomsday/internal/types"
 	"github.com/spf13/cobra"
 )
@@ -173,6 +176,7 @@ func runPrune(cmd *cobra.Command, args []string) error {
 			}
 		}
 
+		// Step 1: Remove forgotten snapshot metadata.
 		for _, s := range forget {
 			name := s.ID + ".json"
 			if err := backend.Remove(ctx, types.FileTypeSnapshot, name); err != nil {
@@ -180,6 +184,92 @@ func runPrune(cmd *cobra.Command, args []string) error {
 			}
 		}
 		logger.Info("Removed forgotten snapshots", "count", len(forget))
+
+		// Step 2: Walk all kept snapshots to build the set of referenced blob IDs.
+		referenced := make(map[types.BlobID]struct{})
+		for _, snap := range keep {
+			if snap.Tree.IsZero() {
+				continue
+			}
+			if err := collectReferencedBlobs(ctx, r, snap.Tree, referenced); err != nil {
+				return fmt.Errorf("collect referenced blobs for snapshot %s: %w", snap.ID[:12], err)
+			}
+		}
+		logger.Info("Referenced blobs", "count", len(referenced))
+
+		// Step 3: Identify unreferenced packs.
+		allEntries := r.Index().AllEntries()
+
+		// Group blobs by pack ID, tracking which are referenced.
+		type packInfo struct {
+			totalBlobs int
+			liveBlobs  int
+		}
+		packs := make(map[string]*packInfo)
+		for blobID, entry := range allEntries {
+			pi, ok := packs[entry.PackID]
+			if !ok {
+				pi = &packInfo{}
+				packs[entry.PackID] = pi
+			}
+			pi.totalBlobs++
+			if _, isRef := referenced[blobID]; isRef {
+				pi.liveBlobs++
+			}
+		}
+
+		// Classify packs: fully dead packs can be deleted entirely.
+		var packsRemoved int
+		for packID, pi := range packs {
+			if pi.liveBlobs == 0 {
+				logger.Info("Removing unreferenced pack", "pack", packID[:12], "blobs", pi.totalBlobs)
+				if err := backend.Remove(ctx, types.FileTypePack, packID); err != nil {
+					logger.Error("Failed to remove pack", "pack", packID[:12], "error", err)
+				} else {
+					packsRemoved++
+				}
+			}
+		}
+		logger.Info("Garbage collection", "packs_removed", packsRemoved)
+
+		// Step 4: Rebuild the index with only referenced entries.
+		newIdx := index.New()
+		for blobID, entry := range allEntries {
+			if _, isRef := referenced[blobID]; isRef {
+				newIdx.Add(entry.PackID, []types.PackedBlob{{
+					ID:                 blobID,
+					Type:               entry.Type,
+					PackID:             entry.PackID,
+					Offset:             entry.Offset,
+					Length:             entry.Length,
+					UncompressedLength: entry.UncompressedLength,
+				}})
+			}
+		}
+
+		// Step 5: Collect old index file names before saving the new one.
+		var oldIndexFiles []string
+		if err := backend.List(ctx, types.FileTypeIndex, func(fi types.FileInfo) error {
+			oldIndexFiles = append(oldIndexFiles, fi.Name)
+			return nil
+		}); err != nil {
+			return fmt.Errorf("list old indexes: %w", err)
+		}
+
+		// Replace the repo's index with the pruned one and save it.
+		r.ReplaceIndex(newIdx)
+		if err := r.SaveIndex(ctx); err != nil {
+			return fmt.Errorf("save new index: %w", err)
+		}
+		logger.Info("Saved new index", "blobs", newIdx.Len())
+
+		// Step 6: Remove old index files.
+		for _, name := range oldIndexFiles {
+			if err := backend.Remove(ctx, types.FileTypeIndex, name); err != nil {
+				logger.Warn("Failed to remove old index", "name", name, "error", err)
+			}
+		}
+		logger.Info("Removed old index files", "count", len(oldIndexFiles))
 	}
 
 	if flagJSON {
@@ -207,6 +297,44 @@ func runPrune(cmd *cobra.Command, args []string) error {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(out)
+	}
+
+	return nil
+}
+
+// collectReferencedBlobs recursively walks a tree blob and adds all
+// referenced blob IDs (tree blobs + data content blobs) to the set.
+func collectReferencedBlobs(ctx context.Context, r *repo.Repository, treeID types.BlobID, referenced map[types.BlobID]struct{}) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// The tree blob itself is referenced.
+	referenced[treeID] = struct{}{}
+
+	data, err := r.LoadBlob(ctx, treeID)
+	if err != nil {
+		return fmt.Errorf("load tree %s: %w", treeID.Short(), err)
+	}
+
+	t, err := tree.Unmarshal(data)
+	if err != nil {
+		return fmt.Errorf("unmarshal tree %s: %w", treeID.Short(), err)
+	}
+
+	for _, node := range t.Nodes {
+		switch node.Type {
+		case tree.NodeTypeDir:
+			if !node.Subtree.IsZero() {
+				if err := collectReferencedBlobs(ctx, r, node.Subtree, referenced); err != nil {
+					return err
+				}
+			}
+		case tree.NodeTypeFile:
+			for _, blobID := range node.Content {
+				referenced[blobID] = struct{}{}
+			}
+		}
 	}
 
 	return nil
