@@ -24,6 +24,7 @@ type Index struct {
 	mu      sync.RWMutex
 	entries map[types.BlobID]Entry
 	pending map[types.BlobID]struct{} // blobs being processed (not yet in a pack)
+	strings map[string]string         // interned strings (PackID dedup)
 }
 
 // New creates an empty index.
@@ -31,16 +32,27 @@ func New() *Index {
 	return &Index{
 		entries: make(map[types.BlobID]Entry),
 		pending: make(map[types.BlobID]struct{}),
+		strings: make(map[string]string),
 	}
+}
+
+// intern returns a shared copy of s, deduplicating identical strings.
+func (idx *Index) intern(s string) string {
+	if interned, ok := idx.strings[s]; ok {
+		return interned
+	}
+	idx.strings[s] = s
+	return s
 }
 
 // Add registers blobs from a completed pack file into the index.
 func (idx *Index) Add(packID string, blobs []types.PackedBlob) {
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
+	interned := idx.intern(packID)
 	for _, b := range blobs {
 		idx.entries[b.ID] = Entry{
-			PackID:             packID,
+			PackID:             interned,
 			Offset:             b.Offset,
 			Length:             b.Length,
 			Type:               b.Type,
@@ -160,6 +172,7 @@ func (idx *Index) Unmarshal(data []byte) error {
 		if err != nil {
 			return fmt.Errorf("index.Unmarshal: %w", err)
 		}
+		e.PackID = idx.intern(e.PackID)
 		idx.entries[id] = e
 	}
 	return nil

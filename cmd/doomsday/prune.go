@@ -218,21 +218,17 @@ func runPrune(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		// Classify packs: fully dead packs can be deleted entirely.
-		var packsRemoved int
+		// Identify dead packs (no live blobs).
+		var deadPacks []string
 		for packID, pi := range packs {
 			if pi.liveBlobs == 0 {
-				logger.Info("Removing unreferenced pack", "pack", packID[:12], "blobs", pi.totalBlobs)
-				if err := backend.Remove(ctx, types.FileTypePack, packID); err != nil {
-					logger.Error("Failed to remove pack", "pack", packID[:12], "error", err)
-				} else {
-					packsRemoved++
-				}
+				deadPacks = append(deadPacks, packID)
 			}
 		}
-		logger.Info("Garbage collection", "packs_removed", packsRemoved)
 
 		// Step 4: Rebuild the index with only referenced entries.
+		// This must be saved BEFORE deleting packs or old indexes so that
+		// a crash at any point leaves the repo in a valid state.
 		newIdx := index.New()
 		for blobID, entry := range allEntries {
 			if _, isRef := referenced[blobID]; isRef {
@@ -263,13 +259,29 @@ func runPrune(cmd *cobra.Command, args []string) error {
 		}
 		logger.Info("Saved new index", "blobs", newIdx.Len())
 
-		// Step 6: Remove old index files.
+		// Step 6: Remove old index files BEFORE deleting packs.
+		// Order matters for crash safety: if we crash after deleting packs
+		// but before removing old indexes, those indexes would reference
+		// deleted packs. By removing old indexes first, repo.Open will only
+		// load the new index which doesn't reference dead packs.
 		for _, name := range oldIndexFiles {
 			if err := backend.Remove(ctx, types.FileTypeIndex, name); err != nil {
 				logger.Warn("Failed to remove old index", "name", name, "error", err)
 			}
 		}
 		logger.Info("Removed old index files", "count", len(oldIndexFiles))
+
+		// Step 7: Now safe to delete unreferenced packs.
+		var packsRemoved int
+		for _, packID := range deadPacks {
+			logger.Info("Removing unreferenced pack", "pack", packID[:12], "blobs", packs[packID].totalBlobs)
+			if err := backend.Remove(ctx, types.FileTypePack, packID); err != nil {
+				logger.Error("Failed to remove pack", "pack", packID[:12], "error", err)
+			} else {
+				packsRemoved++
+			}
+		}
+		logger.Info("Garbage collection", "packs_removed", packsRemoved)
 	}
 
 	if flagJSON {

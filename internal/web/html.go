@@ -179,7 +179,7 @@ table.dt .dir{color:var(--brand2)}
 
     <!-- search -->
     <div x-show="page==='search'">
-      <div style="padding:6px 14px;font-size:11px;color:var(--fg3)" x-text="(searchResults||[]).length+' match(es)'"></div>
+      <div style="padding:6px 14px;font-size:11px;color:var(--fg3)" x-text="(searchResults||[]).length+' match(es)'+(searchTruncated?' (results capped)':'')"></div>
       <table class="dt">
         <thead><tr><th class="ic"></th><th>Path</th><th>Mode</th><th class="r">Size</th><th>Modified</th></tr></thead>
         <tbody><template x-for="r in (searchResults||[])" :key="r.path">
@@ -314,7 +314,7 @@ function app(){
     treeEntries:[], browsingPath:[],
     fileData:null,
     compareData:null,
-    searchResults:null, findPattern:'',
+    searchResults:null, searchTruncated:false, findPattern:'',
     showRestore:false, restoreTarget:'/tmp/doomsday-restore',
     restoreMode:'custom', restoreOrigPath:null, restoreOrigDisplay:null, restoreScope:null,
     rStatus:null, rPct:0, rMsg:'', rErr:'',
@@ -392,7 +392,7 @@ function app(){
         this.findPattern=s.q;
         const q={dest:this.currentDest,snapshot:snapObj.id,pattern:s.q};
         if(!cached('/api/find',q))this.page='loading';
-        try{const d=await api('/api/find',q,true);this.searchResults=d.matches||[]}
+        try{const d=await api('/api/find',q,true);this.searchResults=d.matches||[];this.searchTruncated=!!d.truncated}
         catch(e){this.searchResults=[]}
         this.page='search';
         if(push)history.pushState(null,'',toURL(this.currentDest,snapObj.short_id,'search',[s.q]));

@@ -8,6 +8,7 @@ package web
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
@@ -550,11 +551,21 @@ func (s *Server) handleFind(w http.ResponseWriter, r *http.Request) {
 		HasContent bool   `json:"has_content"`
 	}
 
+	const maxResults = 10000
 	var results []findResultJSON
+	var limitHit bool
 
-	var walkTreeFind func(t *tree.Tree, prefix string) error
-	walkTreeFind = func(t *tree.Tree, prefix string) error {
+	var walkTreeFind func(ctx context.Context, t *tree.Tree, prefix string) error
+	walkTreeFind = func(ctx context.Context, t *tree.Tree, prefix string) error {
 		for _, node := range t.Nodes {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if len(results) >= maxResults {
+				limitHit = true
+				return nil
+			}
+
 			nodePath := prefix + node.Name
 
 			matched, _ := filepath.Match(pattern, node.Name)
@@ -576,7 +587,7 @@ func (s *Server) handleFind(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if node.Type == tree.NodeTypeDir && !node.Subtree.IsZero() {
-				data, err := repo.LoadBlob(r.Context(), node.Subtree)
+				data, err := repo.LoadBlob(ctx, node.Subtree)
 				if err != nil {
 					continue
 				}
@@ -584,7 +595,7 @@ func (s *Server) handleFind(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					continue
 				}
-				if err := walkTreeFind(subtree, nodePath+"/"); err != nil {
+				if err := walkTreeFind(ctx, subtree, nodePath+"/"); err != nil {
 					return err
 				}
 			}
@@ -592,14 +603,15 @@ func (s *Server) handleFind(w http.ResponseWriter, r *http.Request) {
 		return nil
 	}
 
-	if err := walkTreeFind(rootTree, "/"); err != nil {
+	if err := walkTreeFind(r.Context(), rootTree, "/"); err != nil && r.Context().Err() == nil {
 		httpError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	writeJSON(w, map[string]any{
-		"matches": results,
-		"count":   len(results),
+		"matches":   results,
+		"count":     len(results),
+		"truncated": limitHit,
 	})
 }
 
@@ -811,9 +823,16 @@ func (s *Server) handleCompare(w http.ResponseWriter, r *http.Request) {
 		entries = filtered
 	}
 
+	const maxCompareResults = 10000
+	truncated := len(entries) > maxCompareResults
+	if truncated {
+		entries = entries[:maxCompareResults]
+	}
+
 	writeJSON(w, map[string]any{
-		"entries":   entries,
-		"count":     len(entries),
+		"entries":    entries,
+		"count":      len(entries),
+		"truncated":  truncated,
 		"snapshot_a": shortID(snapA),
 		"snapshot_b": shortID(snapB),
 	})
@@ -824,51 +843,60 @@ type treeFileInfo struct {
 	size      int64
 	modTime   string
 	nodeType  string
-	contentID string // concatenation of blob IDs for change detection
+	contentID [32]byte // hash of blob IDs for change detection
 }
 
 // collectTreeFiles walks a snapshot tree and collects all file entries.
+// Respects context cancellation and stops after maxFiles (0 = no limit).
 func collectTreeFiles(ctx context.Context, r *repo.Repository, treeID types.BlobID, prefix string) (map[string]treeFileInfo, error) {
+	files := make(map[string]treeFileInfo)
+	if err := walkTreeFiles(ctx, r, treeID, prefix, files); err != nil {
+		return nil, err
+	}
+	return files, nil
+}
+
+func walkTreeFiles(ctx context.Context, r *repo.Repository, treeID types.BlobID, prefix string, files map[string]treeFileInfo) error {
 	if treeID.IsZero() {
-		return nil, nil
+		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
 	data, err := r.LoadBlob(ctx, treeID)
 	if err != nil {
-		return nil, fmt.Errorf("load tree blob: %w", err)
+		return fmt.Errorf("load tree blob: %w", err)
 	}
 	t, err := tree.Unmarshal(data)
 	if err != nil {
-		return nil, fmt.Errorf("unmarshal tree: %w", err)
+		return fmt.Errorf("unmarshal tree: %w", err)
 	}
 
-	files := make(map[string]treeFileInfo)
 	for _, node := range t.Nodes {
 		nodePath := prefix + "/" + node.Name
 
 		if node.Type == tree.NodeTypeDir && !node.Subtree.IsZero() {
-			subFiles, err := collectTreeFiles(ctx, r, node.Subtree, nodePath)
-			if err != nil {
-				return nil, err
-			}
-			for k, v := range subFiles {
-				files[k] = v
+			if err := walkTreeFiles(ctx, r, node.Subtree, nodePath, files); err != nil {
+				return err
 			}
 		} else if node.Type == tree.NodeTypeFile {
-			// Build a content fingerprint from blob IDs.
-			var contentParts []string
+			// Hash the blob IDs for compact change detection.
+			h := sha256.New()
 			for _, id := range node.Content {
-				contentParts = append(contentParts, id.String())
+				h.Write(id[:])
 			}
+			var cid [32]byte
+			copy(cid[:], h.Sum(nil))
 			files[nodePath] = treeFileInfo{
 				size:      node.Size,
 				modTime:   node.ModTime.Local().Format("2006-01-02 15:04"),
 				nodeType:  string(node.Type),
-				contentID: strings.Join(contentParts, ","),
+				contentID: cid,
 			}
 		}
 	}
-	return files, nil
+	return nil
 }
 
 // --- Helpers ---

@@ -60,6 +60,11 @@ type Repository struct {
 	config   *Config
 	idx      *index.Index
 	cacheDir string // local index cache directory (empty = disabled)
+
+	// Pack blob cache: avoids redundant backend reads when multiple blobs
+	// are loaded from the same pack file (common during restore/browse).
+	blobCache    map[types.BlobID][]byte
+	blobCacheMax int
 }
 
 // Init creates a new repository at the given backend.
@@ -208,7 +213,16 @@ func (r *Repository) SavePack(ctx context.Context, packData []byte, blobType typ
 }
 
 // LoadBlob loads and decrypts a single blob from its pack.
+// Decrypted blobs are cached in memory to avoid redundant backend reads
+// when multiple blobs from the same pack are accessed sequentially.
 func (r *Repository) LoadBlob(ctx context.Context, id types.BlobID) ([]byte, error) {
+	// Check blob cache first.
+	if r.blobCache != nil {
+		if data, ok := r.blobCache[id]; ok {
+			return data, nil
+		}
+	}
+
 	entry, ok := r.idx.Lookup(id)
 	if !ok {
 		return nil, fmt.Errorf("repo.LoadBlob: %w: %s", types.ErrNotFound, id.Short())
@@ -254,7 +268,26 @@ func (r *Repository) LoadBlob(ctx context.Context, id types.BlobID) ([]byte, err
 		return nil, fmt.Errorf("repo.LoadBlob: %w: content ID mismatch", types.ErrCorrupted)
 	}
 
+	// Cache the decrypted blob for future reads from the same pack.
+	r.cacheBlob(id, decompressed)
+
 	return decompressed, nil
+}
+
+// cacheBlob stores a decrypted blob in the in-memory LRU cache.
+func (r *Repository) cacheBlob(id types.BlobID, data []byte) {
+	if r.blobCache == nil {
+		r.blobCache = make(map[types.BlobID][]byte)
+		r.blobCacheMax = 256 // cache up to 256 blobs (~256 MiB worst case)
+	}
+	if len(r.blobCache) >= r.blobCacheMax {
+		// Evict a random entry (Go map iteration is random).
+		for k := range r.blobCache {
+			delete(r.blobCache, k)
+			break
+		}
+	}
+	r.blobCache[id] = data
 }
 
 // SaveSnapshot saves a snapshot metadata file to the repository.

@@ -280,14 +280,36 @@ func (s *Session) LoadSnapshots(ctx context.Context, dest *config.DestConfig) ([
 		return nil, fmt.Errorf("list snapshots: %w", err)
 	}
 
+	// Load snapshots concurrently for faster listing on remote backends.
+	type result struct {
+		idx  int
+		item SnapshotItem
+		ok   bool
+	}
+	results := make([]result, len(ids))
+	var wg sync.WaitGroup
+	// Limit concurrency to avoid overwhelming the backend.
+	sem := make(chan struct{}, 8)
+	for i, id := range ids {
+		wg.Add(1)
+		go func(idx int, snapID string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			snap, err := r.LoadSnapshot(ctx, snapID)
+			if err != nil {
+				return
+			}
+			results[idx] = result{idx: idx, item: snapshotToItem(snap), ok: true}
+		}(i, id)
+	}
+	wg.Wait()
+
 	var items []SnapshotItem
-	for _, id := range ids {
-		snap, err := r.LoadSnapshot(ctx, id)
-		if err != nil {
-			continue
+	for _, res := range results {
+		if res.ok {
+			items = append(items, res.item)
 		}
-		item := snapshotToItem(snap)
-		items = append(items, item)
 	}
 
 	// Sort by time, newest first.

@@ -288,54 +288,50 @@ func Run(ctx context.Context, r *repo.Repository, opts Options) (*snapshot.Snaps
 			return di > dj
 		})
 
+		// Build parent→children map for O(1) lookup (replaces O(n^2) scan).
+		childDirs := make(map[string][]string) // parent relPath → child dir relPaths
+		for _, dirRel := range dirOrder {
+			parent := filepath.Dir(dirRel)
+			if parent == "." {
+				parent = ""
+			}
+			childDirs[parent] = append(childDirs[parent], dirRel)
+		}
+
 		// Build tree blobs bottom-up
 		dirTreeIDs := make(map[string]types.BlobID)
 
 		for _, dirRel := range dirOrder {
 			children := dirChildren[dirRel]
 
-			// Sort children by name for deterministic trees
-			sort.Slice(children, func(i, j int) bool {
-				return children[i].Name < children[j].Name
-			})
-
-			// Add subdirectory entries (directories whose parent is this dir).
+			// Add subdirectory entries whose parent is this dir.
 			// These were already processed because we iterate deepest-first.
-			for _, otherDir := range dirOrder {
-				if otherDir == dirRel {
+			for _, subDir := range childDirs[dirRel] {
+				subtreeID, ok := dirTreeIDs[subDir]
+				if !ok {
 					continue
 				}
-				otherParent := filepath.Dir(otherDir)
-				if otherParent == "." {
-					otherParent = ""
+				dirName := filepath.Base(subDir)
+				// Check if we already have this directory node from the walker.
+				found := false
+				for idx := range children {
+					if children[idx].Name == dirName && children[idx].Type == tree.NodeTypeDir {
+						children[idx].Subtree = subtreeID
+						found = true
+						break
+					}
 				}
-				if otherParent == dirRel {
-					subtreeID, ok := dirTreeIDs[otherDir]
-					if !ok {
-						continue
-					}
-					dirName := filepath.Base(otherDir)
-					// Check if we already have this directory node
-					found := false
-					for idx := range children {
-						if children[idx].Name == dirName && children[idx].Type == tree.NodeTypeDir {
-							children[idx].Subtree = subtreeID
-							found = true
-							break
-						}
-					}
-					if !found {
-						children = append(children, tree.Node{
-							Name:    dirName,
-							Type:    tree.NodeTypeDir,
-							Mode:    os.ModeDir | 0755,
-							Subtree: subtreeID,
-						})
-					}
+				if !found {
+					children = append(children, tree.Node{
+						Name:    dirName,
+						Type:    tree.NodeTypeDir,
+						Mode:    os.ModeDir | 0755,
+						Subtree: subtreeID,
+					})
 				}
 			}
 
-			// Re-sort after adding subdirs
+			// Sort children by name for deterministic trees.
 			sort.Slice(children, func(i, j int) bool {
 				return children[i].Name < children[j].Name
 			})

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/jclement/doomsday/internal/types"
@@ -73,7 +74,16 @@ func Unmarshal(data []byte) (*Tree, error) {
 }
 
 // Find returns the node with the given name, or nil if not found.
+// Uses binary search since nodes are sorted by name during backup.
+// Falls back to linear scan if the slice is unsorted (defensive).
 func (t *Tree) Find(name string) *Node {
+	i := sort.Search(len(t.Nodes), func(i int) bool {
+		return t.Nodes[i].Name >= name
+	})
+	if i < len(t.Nodes) && t.Nodes[i].Name == name {
+		return &t.Nodes[i]
+	}
+	// Fallback: linear scan in case nodes aren't sorted (old snapshots).
 	for i := range t.Nodes {
 		if t.Nodes[i].Name == name {
 			return &t.Nodes[i]

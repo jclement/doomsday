@@ -66,17 +66,14 @@ func TestPlanEntry_Types(t *testing.T) {
 	// Verify that the planEntry struct stores what we expect.
 	entry := planEntry{
 		relPath: "foo/bar.txt",
-		node: tree.Node{
-			Name: "bar.txt",
-			Type: tree.NodeTypeFile,
-			Size: 1024,
-		},
+		size:    1024,
+		mode:    0644,
 	}
 	if entry.relPath != "foo/bar.txt" {
 		t.Errorf("relPath = %q", entry.relPath)
 	}
-	if entry.node.Type != tree.NodeTypeFile {
-		t.Errorf("node.Type = %q", entry.node.Type)
+	if entry.size != 1024 {
+		t.Errorf("size = %d", entry.size)
 	}
 }
 
@@ -215,22 +212,22 @@ func TestBuildPlan_Ordering(t *testing.T) {
 	if len(plan.dirs) != 1 {
 		t.Fatalf("expected 1 dir, got %d", len(plan.dirs))
 	}
-	if plan.dirs[0].node.Name != "adir" {
-		t.Errorf("dir name = %q", plan.dirs[0].node.Name)
+	if plan.dirs[0].relPath != "adir" {
+		t.Errorf("dir relPath = %q", plan.dirs[0].relPath)
 	}
 
 	if len(plan.files) != 1 {
 		t.Fatalf("expected 1 file, got %d", len(plan.files))
 	}
-	if plan.files[0].node.Name != "bfile.txt" {
-		t.Errorf("file name = %q", plan.files[0].node.Name)
+	if plan.files[0].relPath != "bfile.txt" {
+		t.Errorf("file relPath = %q", plan.files[0].relPath)
 	}
 
 	if len(plan.symlinks) != 1 {
 		t.Fatalf("expected 1 symlink, got %d", len(plan.symlinks))
 	}
-	if plan.symlinks[0].node.Name != "clink" {
-		t.Errorf("symlink name = %q", plan.symlinks[0].node.Name)
+	if plan.symlinks[0].relPath != "clink" {
+		t.Errorf("symlink relPath = %q", plan.symlinks[0].relPath)
 	}
 }
 
@@ -252,8 +249,8 @@ func TestBuildPlan_IncludeFilter(t *testing.T) {
 	if len(plan.dirs) != 1 {
 		t.Fatalf("expected 1 dir, got %d", len(plan.dirs))
 	}
-	if plan.dirs[0].node.Name != "docs" {
-		t.Errorf("expected docs, got %q", plan.dirs[0].node.Name)
+	if plan.dirs[0].relPath != "docs" {
+		t.Errorf("expected docs, got %q", plan.dirs[0].relPath)
 	}
 	if len(plan.files) != 0 {
 		t.Errorf("expected 0 files, got %d", len(plan.files))

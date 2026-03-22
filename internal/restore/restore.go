@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/jclement/doomsday/internal/repo"
 	"github.com/jclement/doomsday/internal/tree"
@@ -128,7 +129,7 @@ func Run(ctx context.Context, r *repo.Repository, snapshotID string, targetDir s
 		if opts.OnProgress != nil {
 			opts.OnProgress(ProgressEvent{
 				Path:           f.relPath,
-				TotalBytes:     f.node.Size,
+				TotalBytes:     f.size,
 				FilesCompleted: filesCompleted,
 				FilesTotal:     int64(len(plan.files)),
 				IsDryRun:       opts.DryRun,
@@ -147,7 +148,7 @@ func Run(ctx context.Context, r *repo.Repository, snapshotID string, targetDir s
 				}
 			}
 
-			if err := restoreFile(ctx, r, f.node, finalPath); err != nil {
+			if err := restoreFile(ctx, r, f.content, finalPath); err != nil {
 				return fmt.Errorf("restore: write %s: %w", f.relPath, err)
 			}
 		}
@@ -169,7 +170,7 @@ func Run(ctx context.Context, r *repo.Repository, snapshotID string, targetDir s
 			// SECURITY: Validate that symlink targets don't escape the restore
 			// directory. Absolute targets are rejected; relative targets are
 			// resolved against the link's parent directory.
-			target := s.node.SymlinkTarget
+			target := s.symlinkTarget
 			if filepath.IsAbs(target) {
 				return fmt.Errorf("restore: symlink %s: absolute symlink target %q not allowed", s.relPath, target)
 			}
@@ -194,7 +195,7 @@ func Run(ctx context.Context, r *repo.Repository, snapshotID string, targetDir s
 	if !opts.DryRun {
 		for _, f := range plan.files {
 			finalPath := filepath.Join(absTarget, f.relPath)
-			if err := os.Chmod(finalPath, f.node.Mode.Perm()); err != nil {
+			if err := os.Chmod(finalPath, f.mode.Perm()); err != nil {
 				return fmt.Errorf("restore: chmod %s: %w", f.relPath, err)
 			}
 		}
@@ -205,7 +206,7 @@ func Run(ctx context.Context, r *repo.Repository, snapshotID string, targetDir s
 		for i := len(plan.dirs) - 1; i >= 0; i-- {
 			d := plan.dirs[i]
 			dirPath := filepath.Join(absTarget, d.relPath)
-			_ = os.Chmod(dirPath, d.node.Mode.Perm())
+			_ = os.Chmod(dirPath, d.mode.Perm())
 		}
 	}
 
@@ -214,7 +215,7 @@ func Run(ctx context.Context, r *repo.Repository, snapshotID string, targetDir s
 	if !opts.DryRun {
 		for _, f := range plan.files {
 			finalPath := filepath.Join(absTarget, f.relPath)
-			if err := os.Chtimes(finalPath, f.node.AccessTime, f.node.ModTime); err != nil {
+			if err := os.Chtimes(finalPath, f.accessTime, f.modTime); err != nil {
 				return fmt.Errorf("restore: chtimes %s: %w", f.relPath, err)
 			}
 		}
@@ -225,7 +226,7 @@ func Run(ctx context.Context, r *repo.Repository, snapshotID string, targetDir s
 		for i := len(plan.dirs) - 1; i >= 0; i-- {
 			d := plan.dirs[i]
 			dirPath := filepath.Join(absTarget, d.relPath)
-			_ = os.Chtimes(dirPath, d.node.AccessTime, d.node.ModTime)
+			_ = os.Chtimes(dirPath, d.accessTime, d.modTime)
 		}
 	}
 
@@ -248,10 +249,16 @@ type restorePlan struct {
 	symlinks []planEntry
 }
 
-// planEntry pairs a relative path with its tree node.
+// planEntry holds only the fields needed for restore, not the full tree.Node.
+// This reduces memory for large restores (millions of files).
 type planEntry struct {
-	relPath string
-	node    tree.Node
+	relPath       string
+	mode          os.FileMode
+	modTime       time.Time
+	accessTime    time.Time
+	size          int64
+	content       []types.BlobID // file content blob IDs
+	symlinkTarget string
 }
 
 // buildPlan recursively walks the snapshot tree and populates the plan.
@@ -277,7 +284,10 @@ func buildPlan(ctx context.Context, r *repo.Repository, t *tree.Tree, prefix str
 
 		switch node.Type {
 		case tree.NodeTypeDir:
-			plan.dirs = append(plan.dirs, planEntry{relPath: relPath, node: node})
+			plan.dirs = append(plan.dirs, planEntry{
+				relPath: relPath, mode: node.Mode,
+				modTime: node.ModTime, accessTime: node.AccessTime,
+			})
 
 			if !node.Subtree.IsZero() {
 				subtree, err := loadTree(ctx, r, node.Subtree)
@@ -290,10 +300,17 @@ func buildPlan(ctx context.Context, r *repo.Repository, t *tree.Tree, prefix str
 			}
 
 		case tree.NodeTypeFile:
-			plan.files = append(plan.files, planEntry{relPath: relPath, node: node})
+			plan.files = append(plan.files, planEntry{
+				relPath: relPath, mode: node.Mode, size: node.Size,
+				modTime: node.ModTime, accessTime: node.AccessTime,
+				content: node.Content,
+			})
 
 		case tree.NodeTypeSymlink:
-			plan.symlinks = append(plan.symlinks, planEntry{relPath: relPath, node: node})
+			plan.symlinks = append(plan.symlinks, planEntry{
+				relPath: relPath, mode: node.Mode,
+				symlinkTarget: node.SymlinkTarget,
+			})
 
 		default:
 			// Dev, FIFO, socket: metadata-only types. Skip during restore
@@ -346,7 +363,7 @@ func loadTree(ctx context.Context, r *repo.Repository, id types.BlobID) (*tree.T
 // restoreFile writes a single file atomically. Content blobs are loaded,
 // decompressed, and written to a temp file. On success the temp file is
 // renamed to the final path.
-func restoreFile(ctx context.Context, r *repo.Repository, node tree.Node, finalPath string) error {
+func restoreFile(ctx context.Context, r *repo.Repository, content []types.BlobID, finalPath string) error {
 	dir := filepath.Dir(finalPath)
 
 	// Generate a random suffix for the temp file.
@@ -373,7 +390,7 @@ func restoreFile(ctx context.Context, r *repo.Repository, node tree.Node, finalP
 
 	// Write each content blob sequentially.
 	var written int64
-	for _, blobID := range node.Content {
+	for _, blobID := range content {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
