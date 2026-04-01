@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jclement/doomsday/internal/backup"
 	"github.com/jclement/doomsday/internal/backend/local"
+	"github.com/jclement/doomsday/internal/backup"
 	"github.com/jclement/doomsday/internal/crypto"
 	"github.com/jclement/doomsday/internal/repo"
 )

@@ -115,7 +115,7 @@ func Run(ctx context.Context, r *repo.Repository, opts Options) (*snapshot.Snaps
 		// dirChildren and dirOrder are only written by the walker goroutine
 		// and read after g.Wait(), so no mutex is needed.
 		dirChildren := make(map[string][]tree.Node) // relDir -> child nodes
-		dirOrder := []string{}                       // track discovery order of directories
+		dirOrder := []string{}                      // track discovery order of directories
 
 		// Use errgroup for concurrent file processing
 		g, gctx := errgroup.WithContext(ctx)

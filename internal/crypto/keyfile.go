@@ -20,9 +20,9 @@ type KeyFile struct {
 	N                int    `json:"N,omitempty"`
 	R                int    `json:"r,omitempty"`
 	P                int    `json:"p,omitempty"`
-	Salt             string `json:"salt,omitempty"`              // base64
-	Nonce            string `json:"nonce,omitempty"`             // base64
-	WrappedMasterKey string `json:"wrapped_master_key"`          // base64
+	Salt             string `json:"salt,omitempty"`     // base64
+	Nonce            string `json:"nonce,omitempty"`    // base64
+	WrappedMasterKey string `json:"wrapped_master_key"` // base64
 }
 
 // IsPlaintext returns true if this is a version 2 (unencrypted) key file.

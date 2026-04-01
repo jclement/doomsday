@@ -12,11 +12,11 @@ import (
 // Snapshot contains metadata for a single point-in-time backup.
 type Snapshot struct {
 	ID               string       `json:"id"`
-	Time             time.Time    `json:"time"`               // backup start time
+	Time             time.Time    `json:"time"` // backup start time
 	Hostname         string       `json:"hostname"`
 	Paths            []string     `json:"paths"`
 	Tags             []string     `json:"tags,omitempty"`
-	Tree             types.BlobID `json:"tree"`               // root tree blob ID
+	Tree             types.BlobID `json:"tree"` // root tree blob ID
 	BackupConfigName string       `json:"backup_config_name"`
 
 	// Summary statistics
@@ -31,8 +31,8 @@ type Summary struct {
 	DirsNew        int64         `json:"dirs_new"`
 	DirsChanged    int64         `json:"dirs_changed"`
 	DirsUnchanged  int64         `json:"dirs_unchanged"`
-	DataAdded      int64         `json:"data_added"`       // bytes of new data
-	TotalSize      int64         `json:"total_size"`       // total bytes in snapshot
+	DataAdded      int64         `json:"data_added"` // bytes of new data
+	TotalSize      int64         `json:"total_size"` // total bytes in snapshot
 	TotalFiles     int64         `json:"total_files"`
 	Duration       time.Duration `json:"duration"`
 }

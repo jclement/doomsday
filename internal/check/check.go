@@ -177,8 +177,8 @@ func checkFull(ctx context.Context, r *repo.Repository, report *Report) error {
 		rc, err := r.Backend().Load(ctx, types.FileTypePack, entry.PackID, int64(entry.Offset), int64(entry.Length))
 		if err != nil {
 			report.Errors = append(report.Errors, Error{
-				BlobID: id.Short(),
-				Pack:   entry.PackID,
+				BlobID:  id.Short(),
+				Pack:    entry.PackID,
 				Message: fmt.Sprintf("failed to load blob: %v", err),
 			})
 			continue
@@ -187,7 +187,7 @@ func checkFull(ctx context.Context, r *repo.Repository, report *Report) error {
 		rc.Close()
 		if err != nil {
 			report.Errors = append(report.Errors, Error{
-				BlobID: id.Short(),
+				BlobID:  id.Short(),
 				Message: fmt.Sprintf("failed to read blob: %v", err),
 			})
 			continue

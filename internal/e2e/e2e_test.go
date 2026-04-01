@@ -105,7 +105,7 @@ func (e *testEnv) writeBinaryFile(relPath string, size int) {
 	e.t.Helper()
 	data := make([]byte, size)
 	for i := range data {
-		data[i] = byte((i * 31 + 17) % 256)
+		data[i] = byte((i*31 + 17) % 256)
 	}
 	absPath := filepath.Join(e.sourceDir, relPath)
 	if err := os.MkdirAll(filepath.Dir(absPath), 0755); err != nil {

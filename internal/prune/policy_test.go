@@ -103,7 +103,7 @@ func TestEmptySnapshots(t *testing.T) {
 func TestKeepYearlyForever(t *testing.T) {
 	// Snapshots spanning 5 years
 	snaps := makeSnapshots(60, 30*24*time.Hour) // ~monthly for 5 years
-	policy := Policy{KeepYearly: -1} // forever
+	policy := Policy{KeepYearly: -1}            // forever
 
 	keep, _ := ApplyPolicy(snaps, policy)
 	// Should keep at least one per year

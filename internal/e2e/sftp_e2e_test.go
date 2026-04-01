@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jclement/doomsday/internal/backup"
 	sftpBackend "github.com/jclement/doomsday/internal/backend/sftp"
+	"github.com/jclement/doomsday/internal/backup"
 	"github.com/jclement/doomsday/internal/check"
 	"github.com/jclement/doomsday/internal/crypto"
 	"github.com/jclement/doomsday/internal/repo"
@@ -98,7 +98,7 @@ func newSFTPTestEnv(t *testing.T) *sftpTestEnv {
 	// Start the doomsday SFTP server in background.
 	serverCfg := server.Config{
 		HostKeyPEM: hostKeyPEMBytes,
-		DataDir:     dataDir,
+		DataDir:    dataDir,
 		Clients: []server.ClientConfig{
 			{
 				Name:       "testclient",
@@ -207,7 +207,7 @@ func (e *sftpTestEnv) sftpWriteBinaryFile(relPath string, size int) {
 	e.t.Helper()
 	data := make([]byte, size)
 	for i := range data {
-		data[i] = byte((i * 31 + 17) % 256)
+		data[i] = byte((i*31 + 17) % 256)
 	}
 	absPath := filepath.Join(e.sourceDir, relPath)
 	if err := os.MkdirAll(filepath.Dir(absPath), 0755); err != nil {
@@ -459,7 +459,7 @@ func TestSFTPE2EAuthRejection(t *testing.T) {
 
 	serverCfg := server.Config{
 		HostKeyPEM: hostKeyPEMBytes,
-		DataDir:     dataDir,
+		DataDir:    dataDir,
 		Clients: []server.ClientConfig{
 			{
 				Name:      "authorized",
@@ -522,7 +522,7 @@ func TestSFTPE2EClientIsolation(t *testing.T) {
 
 	serverCfg := server.Config{
 		HostKeyPEM: hostKeyPEMBytes,
-		DataDir:     dataDir,
+		DataDir:    dataDir,
 		Clients: []server.ClientConfig{
 			{Name: "client1", PublicKey: client1Signer.PublicKey()},
 			{Name: "client2", PublicKey: client2Signer.PublicKey()},

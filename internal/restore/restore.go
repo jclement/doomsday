@@ -491,4 +491,3 @@ func DryRunCount(ctx context.Context, r *repo.Repository, snapshotID string, opt
 		Symlinks: len(plan.symlinks),
 	}, nil
 }
-

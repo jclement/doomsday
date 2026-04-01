@@ -1,6 +1,7 @@
 [tools]
-go = "1.25"
+go = "1.26"
 goreleaser = "2"
+"go:honnef.co/go/tools/cmd/staticcheck" = "latest"
 
 [tasks.test]
 description = "Run all tests with race detection"

@@ -50,12 +50,12 @@ const maxRefreshFailures = 5
 
 // Lock represents an active lock on a repository.
 type Lock struct {
-	backend            types.Backend
-	hmacKey            [32]byte
-	name               string
-	lockType           Type
-	cancel             context.CancelFunc
-	refreshed          chan struct{} // closed when refresh goroutine exits
+	backend             types.Backend
+	hmacKey             [32]byte
+	name                string
+	lockType            Type
+	cancel              context.CancelFunc
+	refreshed           chan struct{} // closed when refresh goroutine exits
 	consecutiveFailures atomic.Int32
 }
 

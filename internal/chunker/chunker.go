@@ -11,8 +11,8 @@ import (
 
 // Default chunk size parameters.
 const (
-	MinSize    = 512 * 1024  // 512 KiB
-	TargetSize = 1024 * 1024 // 1 MiB
+	MinSize    = 512 * 1024      // 512 KiB
+	TargetSize = 1024 * 1024     // 1 MiB
 	MaxSize    = 8 * 1024 * 1024 // 8 MiB
 )
 

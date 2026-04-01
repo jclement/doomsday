@@ -16,13 +16,13 @@ func DefaultServerConfigPath() string {
 
 // ServerConfig is the top-level doomsday server configuration.
 type ServerConfig struct {
-	DataDir          string               `yaml:"data_dir"`                    // root directory for client data
-	Host             string               `yaml:"host,omitempty"`              // listen address (default 0.0.0.0)
-	Port             int                  `yaml:"port,omitempty"`              // listen port (default 8420)
-	HostKey          string               `yaml:"host_key,omitempty"`          // SSH host private key (PEM, auto-generated)
-	TailscaleHostname string              `yaml:"tailscale_hostname,omitempty"` // Tailscale hostname (presence enables Tailscale)
-	TailscaleAuthKey  string              `yaml:"tailscale_auth_key,omitempty"` // Tailscale auth key for headless setup
-	Clients          []ServerClientConfig `yaml:"clients,omitempty"`           // registered clients
+	DataDir           string               `yaml:"data_dir"`                     // root directory for client data
+	Host              string               `yaml:"host,omitempty"`               // listen address (default 0.0.0.0)
+	Port              int                  `yaml:"port,omitempty"`               // listen port (default 8420)
+	HostKey           string               `yaml:"host_key,omitempty"`           // SSH host private key (PEM, auto-generated)
+	TailscaleHostname string               `yaml:"tailscale_hostname,omitempty"` // Tailscale hostname (presence enables Tailscale)
+	TailscaleAuthKey  string               `yaml:"tailscale_auth_key,omitempty"` // Tailscale auth key for headless setup
+	Clients           []ServerClientConfig `yaml:"clients,omitempty"`            // registered clients
 }
 
 // TailscaleEnabled returns true if Tailscale is configured (hostname is set).
@@ -32,7 +32,7 @@ func (c *ServerConfig) TailscaleEnabled() bool {
 
 // ServerClientConfig defines a registered backup client.
 type ServerClientConfig struct {
-	Name       string `yaml:"name"`                 // client username
+	Name       string `yaml:"name"`                  // client username
 	PublicKey  string `yaml:"public_key"`            // SSH public key (authorized_keys format)
 	Quota      string `yaml:"quota,omitempty"`       // e.g. "100GiB", "" or "0" = unlimited
 	AppendOnly bool   `yaml:"append_only,omitempty"` // restrict to append-only operations

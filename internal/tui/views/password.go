@@ -17,11 +17,11 @@ type PasswordModel struct {
 	input  textinput.Model
 
 	// State
-	active   bool
-	errMsg   string
-	action   PendingAction // what to do after auth
-	width    int
-	height   int
+	active bool
+	errMsg string
+	action PendingAction // what to do after auth
+	width  int
+	height int
 }
 
 // PendingAction describes what action is queued after authentication.

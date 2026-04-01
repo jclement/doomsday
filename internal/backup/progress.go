@@ -23,12 +23,12 @@ type Stats struct {
 	FilesUnchanged int64 // files with all chunks already in repo
 
 	// Data
-	BytesRead     int64 // bytes read from filesystem
-	BytesNew      int64 // bytes of new (non-duplicate) data
-	BytesPacked   int64 // bytes written to packs (post-compress+encrypt)
-	ChunksTotal   int64 // total chunks produced
-	ChunksDup     int64 // chunks skipped (dedup)
-	ChunksNew     int64 // chunks stored (new)
+	BytesRead   int64 // bytes read from filesystem
+	BytesNew    int64 // bytes of new (non-duplicate) data
+	BytesPacked int64 // bytes written to packs (post-compress+encrypt)
+	ChunksTotal int64 // total chunks produced
+	ChunksDup   int64 // chunks skipped (dedup)
+	ChunksNew   int64 // chunks stored (new)
 
 	// Packs
 	PacksFlushed int64
@@ -47,7 +47,7 @@ type Stats struct {
 // progressTracker provides atomic counters for backup statistics.
 // It is safe for concurrent use from multiple goroutines.
 type progressTracker struct {
-	_ sync.Mutex // reserved for future use
+	_        sync.Mutex // reserved for future use
 	callback ProgressFunc
 
 	filesTotal     atomic.Int64

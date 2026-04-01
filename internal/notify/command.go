@@ -46,4 +46,3 @@ func (n *CommandNotifier) Send(ctx context.Context, event Event) error {
 	}
 	return nil
 }
-

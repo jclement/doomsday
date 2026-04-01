@@ -10,9 +10,9 @@ import (
 	"strings"
 
 	"github.com/jclement/doomsday/internal/backend/local"
-	"github.com/jclement/doomsday/internal/backup"
 	"github.com/jclement/doomsday/internal/backend/s3"
 	sftpbackend "github.com/jclement/doomsday/internal/backend/sftp"
+	"github.com/jclement/doomsday/internal/backup"
 	"github.com/jclement/doomsday/internal/config"
 	"github.com/jclement/doomsday/internal/crypto"
 	"github.com/jclement/doomsday/internal/notify"
@@ -362,7 +362,7 @@ func exactArgs(n int) cobra.PositionalArgs {
 		if len(args) == n {
 			return nil
 		}
-		return fmt.Errorf("Usage: %s\n\nRun '%s --help' for more information", cmd.UseLine(), cmd.CommandPath())
+		return fmt.Errorf("usage: %s\n\nrun '%s --help' for more information", cmd.UseLine(), cmd.CommandPath())
 	}
 }
 
@@ -372,7 +372,7 @@ func minArgs(n int) cobra.PositionalArgs {
 		if len(args) >= n {
 			return nil
 		}
-		return fmt.Errorf("Usage: %s\n\nRun '%s --help' for more information", cmd.UseLine(), cmd.CommandPath())
+		return fmt.Errorf("usage: %s\n\nrun '%s --help' for more information", cmd.UseLine(), cmd.CommandPath())
 	}
 }
 

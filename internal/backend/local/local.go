@@ -266,4 +266,4 @@ type limitedReadCloser struct {
 }
 
 func (l *limitedReadCloser) Read(p []byte) (int, error) { return l.Reader.Read(p) }
-func (l *limitedReadCloser) Close() error                { return l.Closer.Close() }
+func (l *limitedReadCloser) Close() error               { return l.Closer.Close() }

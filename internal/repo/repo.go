@@ -32,10 +32,10 @@ type Config struct {
 	ID      string `json:"id"`
 
 	// Chunker parameters (immutable after creation)
-	ChunkerAlgorithm string `json:"chunker_algorithm"`
-	ChunkerMinSize   int    `json:"chunker_min_size"`
-	ChunkerMaxSize   int    `json:"chunker_max_size"`
-	ChunkerTargetSize int   `json:"chunker_target_size"`
+	ChunkerAlgorithm  string `json:"chunker_algorithm"`
+	ChunkerMinSize    int    `json:"chunker_min_size"`
+	ChunkerMaxSize    int    `json:"chunker_max_size"`
+	ChunkerTargetSize int    `json:"chunker_target_size"`
 }
 
 // Option configures optional repository behavior.

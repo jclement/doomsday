@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mise lint:*)",
+      "Bash(mise uninstall:*)"
+    ]
+  }
+}

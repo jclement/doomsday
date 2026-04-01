@@ -32,11 +32,11 @@ import (
 // ---------------------------------------------------------------------------
 
 var (
-	serverFlagConfig   string // --config for server.yaml path
-	serverFlagPort     int
-	serverFlagHost     string
-	serverFlagDataDir  string // only for install (overrides config)
-	serverFlagQuota    string
+	serverFlagConfig     string // --config for server.yaml path
+	serverFlagPort       int
+	serverFlagHost       string
+	serverFlagDataDir    string // only for install (overrides config)
+	serverFlagQuota      string
 	serverFlagAppendOnly bool
 )
 
@@ -241,7 +241,6 @@ func runServerInit(cmd *cobra.Command, args []string) error {
 	logger.Info("Start the server with: doomsday server serve")
 	return nil
 }
-
 
 // detectServerDataDir returns a sensible default for data_dir.
 // Prefers /var/lib/doomsday if it exists or can be created; falls back to ~/doomsday-data.
@@ -1381,4 +1380,3 @@ func parseQuota(s string) (int64, error) {
 
 	return int64(num * multiplier), nil
 }
-

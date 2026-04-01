@@ -52,12 +52,12 @@ func (s *SourceConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // SettingsConfig holds global settings that apply to all operations.
 type SettingsConfig struct {
-	Compression       string `yaml:"compression"`                // zstd | none
-	CompressionLevel  int    `yaml:"compression_level"`          // zstd level, default 3
-	CacheDir          string `yaml:"cache_dir,omitempty"`        // default ~/.cache/doomsday
-	LogLevel          string `yaml:"log_level,omitempty"`        // debug | info | warn | error
-	Whimsy            *bool  `yaml:"whimsy,omitempty"`           // nil means default (true)
-	BandwidthUpload   string `yaml:"bandwidth_upload,omitempty"` // e.g. "10MiB/s", "" = unlimited
+	Compression       string `yaml:"compression"`                  // zstd | none
+	CompressionLevel  int    `yaml:"compression_level"`            // zstd level, default 3
+	CacheDir          string `yaml:"cache_dir,omitempty"`          // default ~/.cache/doomsday
+	LogLevel          string `yaml:"log_level,omitempty"`          // debug | info | warn | error
+	Whimsy            *bool  `yaml:"whimsy,omitempty"`             // nil means default (true)
+	BandwidthUpload   string `yaml:"bandwidth_upload,omitempty"`   // e.g. "10MiB/s", "" = unlimited
 	BandwidthDownload string `yaml:"bandwidth_download,omitempty"` // e.g. "50MiB/s", "" = unlimited
 }
 
@@ -99,7 +99,7 @@ type RetentionConfig struct {
 	KeepMonthly int    `yaml:"keep_monthly,omitempty"`
 	KeepYearly  int    `yaml:"keep_yearly,omitempty"` // -1 = forever
 	KeepWithin  string `yaml:"keep_within,omitempty"` // e.g. "30d"
-	MaxSize     string `yaml:"max_size,omitempty"`     // e.g. "500GiB"
+	MaxSize     string `yaml:"max_size,omitempty"`    // e.g. "500GiB"
 }
 
 // NotificationTarget defines a single notification channel.

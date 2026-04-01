@@ -453,7 +453,7 @@ type limitedReadCloser struct {
 }
 
 func (l *limitedReadCloser) Read(p []byte) (int, error) { return l.Reader.Read(p) }
-func (l *limitedReadCloser) Close() error                { return l.Closer.Close() }
+func (l *limitedReadCloser) Close() error               { return l.Closer.Close() }
 
 // Ensure Backend implements types.Backend at compile time.
 var _ types.Backend = (*Backend)(nil)

@@ -15,7 +15,7 @@ type Policy struct {
 	KeepDaily   int           `json:"keep_daily"`
 	KeepWeekly  int           `json:"keep_weekly"`
 	KeepMonthly int           `json:"keep_monthly"`
-	KeepYearly  int           `json:"keep_yearly"`  // -1 = forever
+	KeepYearly  int           `json:"keep_yearly"` // -1 = forever
 	KeepWithin  time.Duration `json:"keep_within"`
 }
 

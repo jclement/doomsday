@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jclement/doomsday/internal/backup"
 	"github.com/jclement/doomsday/internal/backend/local"
+	"github.com/jclement/doomsday/internal/backup"
 	"github.com/jclement/doomsday/internal/crypto"
 	"github.com/jclement/doomsday/internal/index"
 	"github.com/jclement/doomsday/internal/prune"
@@ -632,15 +632,10 @@ func TestAudit_PruneSharedBlobsSurvive(t *testing.T) {
 	snap1Blobs := make(map[types.BlobID]struct{})
 	collectAllBlobsForTest(t, env.ctx, env.repo, snap1.Tree, snap1Blobs)
 
-	for blobID := range snap1Blobs {
-		if _, inRef := referenced[blobID]; !inRef {
-			// This blob is in snap1 but not snap2's reference set.
-			// That's expected for snap1-only tree blobs and unique content.
-			// But shared data blobs should be in both.
-			// We can't easily distinguish here, so just verify the index
-			// still has it (it hasn't been deleted yet).
-		}
-	}
+	// snap1Blobs are verified to exist in the index by collectAllBlobsForTest.
+	// Shared data blobs (e.g. "shared.txt") should also appear in snap2's
+	// referenced set via dedup, but we can't easily distinguish shared vs
+	// snap1-only blobs here, so we rely on the index-level check above.
 
 	// After prune, rebuild index with only referenced blobs.
 	allEntries := env.repo.Index().AllEntries()

@@ -79,7 +79,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 
 	tag := "v" + latest.Version()
 	if err := verifyRelease(ctx, tag); err != nil {
-		return fmt.Errorf("update: signature verification failed: %w\n\nThis may indicate a tampered release. Do NOT proceed.", err)
+		return fmt.Errorf("update: signature verification failed: %w", err)
 	}
 	logger.Info("Release signature verified (Sigstore)")
 
@@ -160,9 +160,9 @@ func verifyNewBundle(checksumData []byte, b *bundle.Bundle) error {
 
 // legacyCosignBundle is the old cosign sign-blob --bundle format.
 type legacyCosignBundle struct {
-	Base64Signature string          `json:"base64Signature"`
-	Cert            string          `json:"cert"`
-	RekorBundle     legacyRekor     `json:"rekorBundle"`
+	Base64Signature string      `json:"base64Signature"`
+	Cert            string      `json:"cert"`
+	RekorBundle     legacyRekor `json:"rekorBundle"`
 }
 
 type legacyRekor struct {

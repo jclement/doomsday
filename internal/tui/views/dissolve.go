@@ -34,8 +34,8 @@ type DissolveModel struct {
 
 type dissolveCell struct {
 	original rune
-	decayAt  int  // tick when this cell starts decaying
-	state    int  // 0=original, 1=glitch, 2=space
+	decayAt  int // tick when this cell starts decaying
+	state    int // 0=original, 1=glitch, 2=space
 }
 
 var glitchChars = []rune("░▒▓█▄▀╬╫╪┼╳╲╱")

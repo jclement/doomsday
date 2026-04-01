@@ -16,14 +16,14 @@ type Styles struct {
 	StatusBar lipgloss.Style
 
 	// Typography
-	Title       lipgloss.Style
-	Subtitle    lipgloss.Style
-	Heading     lipgloss.Style
-	Body        lipgloss.Style
-	Muted       lipgloss.Style
-	Bold        lipgloss.Style
-	Code        lipgloss.Style
-	Whimsy      lipgloss.Style
+	Title    lipgloss.Style
+	Subtitle lipgloss.Style
+	Heading  lipgloss.Style
+	Body     lipgloss.Style
+	Muted    lipgloss.Style
+	Bold     lipgloss.Style
+	Code     lipgloss.Style
+	Whimsy   lipgloss.Style
 
 	// Status indicators
 	StatusOK      lipgloss.Style
@@ -32,25 +32,25 @@ type Styles struct {
 	StatusBadge   lipgloss.Style
 
 	// Cards and containers
-	Card         lipgloss.Style
-	CardActive   lipgloss.Style
-	CardHeader   lipgloss.Style
-	Panel        lipgloss.Style
-	PanelBorder  lipgloss.Style
+	Card        lipgloss.Style
+	CardActive  lipgloss.Style
+	CardHeader  lipgloss.Style
+	Panel       lipgloss.Style
+	PanelBorder lipgloss.Style
 
 	// Data display
-	Key         lipgloss.Style
-	Value       lipgloss.Style
-	Label       lipgloss.Style
-	Number      lipgloss.Style
-	Timestamp   lipgloss.Style
-	Path        lipgloss.Style
-	BlobID      lipgloss.Style
+	Key       lipgloss.Style
+	Value     lipgloss.Style
+	Label     lipgloss.Style
+	Number    lipgloss.Style
+	Timestamp lipgloss.Style
+	Path      lipgloss.Style
+	BlobID    lipgloss.Style
 
 	// Interactive
-	Selected    lipgloss.Style
-	Cursor      lipgloss.Style
-	Highlight   lipgloss.Style
+	Selected  lipgloss.Style
+	Cursor    lipgloss.Style
+	Highlight lipgloss.Style
 
 	// Table
 	TableHeader   lipgloss.Style
@@ -70,11 +70,11 @@ type Styles struct {
 	ProgressETA   lipgloss.Style
 
 	// Dividers
-	Divider       lipgloss.Style
+	Divider lipgloss.Style
 
 	// Logo / brand
-	Logo          lipgloss.Style
-	LogoAccent    lipgloss.Style
+	Logo       lipgloss.Style
+	LogoAccent lipgloss.Style
 
 	// Help
 	HelpKey  lipgloss.Style

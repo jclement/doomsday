@@ -71,19 +71,19 @@ type ColorPalette struct {
 
 // Theme holds the active color palette and metadata.
 type Theme struct {
-	Mode    ThemeMode
-	Colors  ColorPalette
-	IsDark  bool
-	Name    string
+	Mode   ThemeMode
+	Colors ColorPalette
+	IsDark bool
+	Name   string
 }
 
 // DarkPalette returns the dark theme color palette.
 // Apocalyptic aesthetic: deep reds, ambers, muted greens on dark surfaces.
 func DarkPalette() ColorPalette {
 	return ColorPalette{
-		Primary:   lipgloss.Color("#FF6B35"),  // burnt orange
-		Secondary: lipgloss.Color("#D4A574"),  // dusty gold
-		Accent:    lipgloss.Color("#C73E1D"),  // deep crimson
+		Primary:   lipgloss.Color("#FF6B35"), // burnt orange
+		Secondary: lipgloss.Color("#D4A574"), // dusty gold
+		Accent:    lipgloss.Color("#C73E1D"), // deep crimson
 
 		StatusOK:      lipgloss.Color("#4ADE80"), // green
 		StatusWarning: lipgloss.Color("#FBBF24"), // amber
@@ -114,9 +114,9 @@ func DarkPalette() ColorPalette {
 // LightPalette returns the light theme color palette.
 func LightPalette() ColorPalette {
 	return ColorPalette{
-		Primary:   lipgloss.Color("#C73E1D"),  // deep crimson
-		Secondary: lipgloss.Color("#8B6914"),  // dark gold
-		Accent:    lipgloss.Color("#FF6B35"),  // burnt orange
+		Primary:   lipgloss.Color("#C73E1D"), // deep crimson
+		Secondary: lipgloss.Color("#8B6914"), // dark gold
+		Accent:    lipgloss.Color("#FF6B35"), // burnt orange
 
 		StatusOK:      lipgloss.Color("#16A34A"), // green
 		StatusWarning: lipgloss.Color("#D97706"), // amber

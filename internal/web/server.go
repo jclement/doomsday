@@ -32,8 +32,8 @@ import (
 	"github.com/jclement/doomsday/internal/repo"
 	"github.com/jclement/doomsday/internal/restore"
 	"github.com/jclement/doomsday/internal/tree"
-	"github.com/jclement/doomsday/internal/types"
 	"github.com/jclement/doomsday/internal/tui/views"
+	"github.com/jclement/doomsday/internal/types"
 )
 
 // Server is the web UI HTTP server.
@@ -188,14 +188,14 @@ type snapJSON struct {
 	Hostname       string   `json:"hostname"`
 	Paths          string   `json:"paths"`
 	PathsList      []string `json:"paths_list"`
-	TotalFiles     int64  `json:"total_files"`
-	TotalSize      int64  `json:"total_size"`
-	TotalSizeHuman string `json:"total_size_human"`
-	DataAdded      int64  `json:"data_added"`
-	DataAddedHuman string `json:"data_added_human"`
-	FilesNew       int64  `json:"files_new"`
-	FilesChanged   int64  `json:"files_changed"`
-	Duration       string `json:"duration"`
+	TotalFiles     int64    `json:"total_files"`
+	TotalSize      int64    `json:"total_size"`
+	TotalSizeHuman string   `json:"total_size_human"`
+	DataAdded      int64    `json:"data_added"`
+	DataAddedHuman string   `json:"data_added_human"`
+	FilesNew       int64    `json:"files_new"`
+	FilesChanged   int64    `json:"files_changed"`
+	Duration       string   `json:"duration"`
 }
 
 func (s *Server) handleSnapshots(w http.ResponseWriter, r *http.Request) {
@@ -1074,4 +1074,3 @@ func httpError(w http.ResponseWriter, msg string, code int) {
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
-

@@ -48,8 +48,8 @@ type pathEntry struct {
 // TreeLoadedMsg is sent when a tree has been loaded from the repo.
 type TreeLoadedMsg struct {
 	Entries []browserEntry
-	Path    string        // e.g., "/" or "/Documents"
-	TreeID  types.BlobID  // the tree ID that was loaded (needed for pathStack root)
+	Path    string       // e.g., "/" or "/Documents"
+	TreeID  types.BlobID // the tree ID that was loaded (needed for pathStack root)
 	Err     error
 }
 
@@ -96,7 +96,7 @@ func fileIcon(t tree.NodeType) string {
 type BackupPhase int
 
 const (
-	BackupPhaseScanning   BackupPhase = iota
+	BackupPhaseScanning BackupPhase = iota
 	BackupPhaseProcessing
 	BackupPhaseUploading
 	BackupPhaseFinalizing
@@ -165,48 +165,6 @@ func StatsToProgress(stats backup.Stats) BackupProgress {
 
 // --- Formatting Helpers ---
 
-// formatRelativeTime returns a human-friendly relative time string.
-func formatRelativeTime(t time.Time) string {
-	now := time.Now()
-	d := now.Sub(t)
-
-	if d < 0 {
-		d = -d
-		switch {
-		case d < time.Minute:
-			return "in <1m"
-		case d < time.Hour:
-			return fmt.Sprintf("in %dm", int(d.Minutes()))
-		case d < 24*time.Hour:
-			h := int(d.Hours())
-			m := int(d.Minutes()) % 60
-			if m > 0 {
-				return fmt.Sprintf("in %dh%dm", h, m)
-			}
-			return fmt.Sprintf("in %dh", h)
-		default:
-			return fmt.Sprintf("in %dd", int(d.Hours()/24))
-		}
-	}
-
-	switch {
-	case d < time.Minute:
-		return "just now"
-	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
-	case d < 24*time.Hour:
-		h := int(d.Hours())
-		m := int(d.Minutes()) % 60
-		if m > 0 {
-			return fmt.Sprintf("%dh%dm ago", h, m)
-		}
-		return fmt.Sprintf("%dh ago", h)
-	case d < 7*24*time.Hour:
-		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
-	default:
-		return t.Format("2006-01-02 15:04")
-	}
-}
 
 // formatBytes formats a byte count as a human-readable string.
 func formatBytes(b int64) string {
